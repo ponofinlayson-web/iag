@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.db
+
+# Frontend build output (rebuilt by Dockerfile / npm run build)
+backend/static/
+frontend/node_modules/
+
+# Env & secrets
+.env
+
+# Tooling artifacts
+.agent_tmp/
+smoke*.log

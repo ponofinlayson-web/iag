@@ -1,0 +1,93 @@
+name: iag
+
+services:
+  iag-db:
+    image: postgres:16-alpine
+    container_name: iag-db
+    environment:
+      POSTGRES_USER: iag_migrate
+      POSTGRES_PASSWORD: migrate_dev_password
+      POSTGRES_DB: iag
+    volumes:
+      - iag_pgdata:/var/lib/postgresql/data
+      - ./deploy/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iag_migrate -d iag"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+    logging: &logopts
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  iag-migrate:
+    build: .
+    container_name: iag-migrate
+    command: sh -c "/app/.venv/bin/alembic upgrade head && /app/.venv/bin/python -m app.bootstrap && cp -r /app/static/. /shared-static/"
+    user: root
+    environment:
+      IAG_DATABASE_URL: postgresql+asyncpg://iag_migrate:migrate_dev_password@iag-db:5432/iag
+      IAG_SECRET_KEY: dev-stack-secret-key-32-chars-minimum-0123456789
+      IAG_ENV: development
+      IAG_BOOTSTRAP_ADMIN_PASSWORD: ${IAG_BOOTSTRAP_ADMIN_PASSWORD:-Admin123!secret}
+    volumes:
+      - iag_static:/shared-static
+    depends_on:
+      iag-db:
+        condition: service_healthy
+    restart: "no"
+    logging: *logopts
+
+  iag-app-1: &app
+    build: .
+    container_name: iag-app-1
+    environment: &appenv
+      IAG_DATABASE_URL: postgresql+asyncpg://iag_app:app_dev_password@iag-db:5432/iag
+      IAG_SECRET_KEY: dev-stack-secret-key-32-chars-minimum-0123456789
+      IAG_ENV: development
+    depends_on:
+      iag-db:
+        condition: service_healthy
+      iag-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "/app/.venv/bin/python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+    logging: *logopts
+
+  iag-app-2:
+    <<: *app
+    container_name: iag-app-2
+
+  iag-app-3:
+    <<: *app
+    container_name: iag-app-3
+
+  iag-nginx:
+    image: nginx:alpine
+    container_name: iag-nginx
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - iag_static:/usr/share/nginx/html:ro
+    ports:
+      - "8090:80"
+    depends_on:
+      iag-app-1:
+        condition: service_healthy
+      iag-app-2:
+        condition: service_healthy
+      iag-app-3:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logopts
+
+volumes:
+  iag_pgdata:
+  iag_static:

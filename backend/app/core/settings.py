@@ -1,0 +1,41 @@
+"""Typed application settings, loaded from environment with fail-fast checks."""
+from __future__ import annotations
+import secrets
+import sys
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    app_name: str = "IAG"
+    env: str = Field(default="development", alias="IAG_ENV")
+    database_url: str = Field(default="sqlite+aiosqlite:///./iag_test.db", alias="IAG_DATABASE_URL")
+    secret_key: str = Field(default="", alias="IAG_SECRET_KEY")
+    session_expire_minutes: int = Field(default=480, alias="IAG_SESSION_EXPIRE_MINUTES")
+    access_token_expire_minutes: int = Field(default=30, alias="IAG_ACCESS_TOKEN_EXPIRE_MINUTES")
+    max_login_attempts: int = Field(default=5, alias="IAG_MAX_LOGIN_ATTEMPTS")
+    lockout_duration_minutes: int = Field(default=15, alias="IAG_LOCKOUT_DURATION_MINUTES")
+    bootstrap_admin_username: str = Field(default="admin", alias="IAG_BOOTSTRAP_ADMIN_USERNAME")
+    bootstrap_admin_password: str = Field(default="", alias="IAG_BOOTSTRAP_ADMIN_PASSWORD")
+    cors_origins: str = Field(default="", alias="IAG_CORS_ORIGINS")
+    def db_url_sync(self) -> str:
+        """Sync driver URL for Alembic and tests."""
+        if self.database_url.startswith("sqlite+aiosqlite"):
+            return self.database_url.replace("sqlite+aiosqlite", "sqlite", 1)
+        if self.database_url.startswith("postgresql+asyncpg"):
+            return self.database_url.replace("postgresql+asyncpg", "postgresql+psycopg2", 1)
+        return self.database_url
+    def validate_secrets(self) -> None:
+        """Fail fast when a deployment-critical secret is missing."""
+        if self.env == "test":
+            return
+        if not self.secret_key:
+            if self.env == "development":
+                self.secret_key = secrets.token_hex(32)
+                print("[settings] no IAG_SECRET_KEY: generated ephemeral dev key", file=sys.stderr)
+                return
+            raise RuntimeError(
+                "IAG_SECRET_KEY is required outside development. "
+                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+        if len(self.secret_key) < 32:
+            raise RuntimeError("IAG_SECRET_KEY must be at least 32 chars")

@@ -78,32 +78,39 @@ uv.lock + .venv exist — `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-1. Docker stack: not started. compose.yaml + Dockerfile + nginx.conf +
-   scripts/smoke.sh do NOT exist yet. Topology is fixed by the contract:
-   iag-db (postgres:16-alpine, named volume, single source of truth) →
-   iag-migrate (app image, one-shot: alembic upgrade head && python -m
-   app.bootstrap, then exits) → iag-app-1..3 (stateless replicas) →
-   iag-nginx (alpine, load-balances /api to the 3 replicas, serves static
-   SPA directly, NO DB credentials). Healthchecks + depends_on with
-   condition: service_completed_successfully for migrate. json-file log
-   driver with rotation on every service. Resilience invariant to enforce:
-   if all 3 app containers stop, nginx 502s and NOTHING writes to the DB.
-   Docker Desktop was launched mid-session; daemon state unverified.
-   NOTE from frontend session: sandbox blocks raw socket binds (winerror
-   10013 on uvicorn --port 8766). Docker Desktop may or may not work here.
-   If blocked, run tasks 5 (compose proof) on the user's own terminal.
-
-2. Kill-a-replica smoke test (scripts/smoke.sh): not written. Purpose:
-   docker stop iag-app-2 → service must keep serving through nginx →
-   audit chain still verifies → restart app-2. This is the user's core
-   resilience requirement made executable.
-
-3. Git: repo not initialized. After tests are green: git init, commit
-   backend + docs (exclude .venv, node_modules, __pycache__, .env,
-   test artifacts). Default git identity: openhands / openhands@all-hands.dev
-   unless user config exists.
+Nothing. All six build phases complete and verified this session.
 
 ## Session log (newest first)
+
+### 2026-08-17 (stack + proof session — ALL TASKS DONE)
+- Docker stack built & verified: compose.yaml (db -> migrate -> app-1..3 ->
+  nginx), deploy/initdb.sql (iag_app DML-only role), deploy/nginx.conf
+  (SPA + /api LB), Dockerfile (node24 build -> python:3.12-slim, runtime
+  invokes /app/.venv/bin/* DIRECTLY — bare python/alembic and `uv run`
+  both fail in the image: not on PATH / cache perms under USER nobody).
+  nginx on host port **8090** (8080 is occupied by opik-backend-1).
+- Kill-a-replica proof PASSED: login -> audit chain valid -> stop
+  iag-app-2 -> health + chain + dashboard all OK through survivors ->
+  app-2 restarted, rejoined healthy. Stateless session portability
+  proven (cookie minted pre-kill honored post-kill).
+- 3 real bugs the container run surfaced (all masked by SQLite/tests):
+  1. alembic 0001 had `import *` INSIDE functions — compile-time error
+     ast.parse cannot see. Gate upgrade: use py_compile, not ast.parse.
+  2. Aware datetime defaults into naive TIMESTAMP columns — asyncpg
+     rejects (Postgres), aiosqlite silently accepts. Fixed: utcnow()
+     returns NAIVE UTC (models/identity.py) + 6 call sites; convention:
+     DB layer is naive-UTC everywhere.
+  3. uv cache init fails under USER nobody → runtime uses venv binaries.
+- Stack is RUNNING now (5 containers healthy). Login: admin /
+  Admin123!secret at http://localhost:8090. Teardown: docker compose
+  down (add -v to also drop data + seeded static volume).
+- Git: initialized, commit ec90389 (70 files), identity
+  ponofinlayson-web + openhands co-author. No remote configured.
+- Next candidates (post-v1 spec): reminder-email task queue inside app
+  replicas (never a separate writer), SoD rules, external chain
+  anchoring, real LDAP/Entra connectors. Also consider: prod-grade
+  secrets (env file / secret manager) — compose currently hardcodes
+  dev passwords, fine for local stack, not for any real deployment.
 
 ### 2026-08-17 (frontend session)
 - Tests green 8/8; prod drivers asyncpg 0.31.0 + psycopg2-binary 2.9.12 added.

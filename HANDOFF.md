@@ -63,6 +63,16 @@ backend/app/routers/reviews.py — queue, count, history, detail, submit
 backend/app/routers/audit.py — list (audit/system_admin/cert_admin only),
   /verify, /export CSV
 backend/app/routers/dashboard.py — portfolio + personal workload counts
+backend/app/core/email_worker.py — reminder worker: _claim_due (FOR UPDATE
+  SKIP LOCKED + stuck reclaim), send outside TX, _finalize sent/failed/
+  dead-letter + audit, run_pass, worker_loop (lifespan, skipped in test env)
+backend/app/routers/reminders.py — read-only: GET /api/reminders/outbox
+  (paged, campaign/status filter), GET /api/reminders/campaigns/{id}
+  (by_status counts); CertAdminUser only
+backend/app/models/email.py — EmailOutbox + OutboxStatus
+backend/alembic/versions/0003_email_outbox.py — explicit DDL, portable types
+backend/tests/test_reminders.py — enqueue, claim/send+chain, no-double-send,
+  retry→dead-letter, cancel-blocks-claim, 401/403, boot (suite 19/19)
 backend/app/main.py — FastAPI assembly, JSON logging, /api/health, SPA mount
 backend/app/bootstrap.py — one-shot first-admin creator (env creds)
 backend/alembic.ini, alembic/env.py, alembic/script.py.mako
@@ -78,9 +88,29 @@ uv.lock + .venv exist — `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Nothing. All six build phases complete and verified this session.
+Nothing. All six build phases + SoD + reminder-email fork A complete and verified.
 
 ## Session log (newest first)
+
+### 2026-08-17 (reminder-email session - FORK A SHIPPED)
+
+- **Fork A built, live-proven, committed 9e3f03b.** Enqueue on campaign
+  start (resolved reviewer emails), in-replica worker
+  (claim SKIP LOCKED → send outside TX → finalize TX; stuck reclaim,
+  retry→dead-letter, log-only dev delivery), read-only API + /outbox
+  frontend view, migration 0003 on existing volume.
+- Proof: pytest 19/19; smoke.sh PASS incl kill-a-replica with worker
+  deployed; scripts/live_reminder_check.py PASS (enqueue → sent within
+  poll window → cancel path → chain valid); 0003 via psql.
+- Compose now passes reminder/SMTP knobs through with defaults; .env has
+  IAG_REMINDER_DELAY_MINUTES=0, IAG_REMINDER_POLL_SECONDS=5 for fast
+  proofs (60/60 code defaults remain for any deployment).
+- Test gotchas fixed: audit API returns details as JSON string (parse
+  before .get); worker skip in test env (SessionLocal points at prod URL).
+- Live-script gotchas: unique username per run (import 500s on
+  ix_identities_username collision); all call() sites need the session
+  cookie (module-level _COOKIE fallback added).
+- .gitignore: frontend/tsconfig.tsbuildinfo untracked.
 
 ### 2026-08-17 (SoD session — feature complete)
 - SoD engine shipped per ARCHITECTURE design slot: PURE READ-SIDE. Given

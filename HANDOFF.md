@@ -82,6 +82,41 @@ Nothing. All six build phases complete and verified this session.
 
 ## Session log (newest first)
 
+### 2026-08-17 (SoD session — feature complete)
+- SoD engine shipped per ARCHITECTURE design slot: PURE READ-SIDE. Given
+  identity entitlements + active rules -> violations, computed per request.
+  No persistence of violations, no auto-revoke, no background anything.
+  Reviewers decide; the engine informs.
+- New: models/sod.py (SodRule: two entitlement FKs CASCADE, severity,
+  is_active, unique name), alembic 0002 (EXPLICIT DDL — not create_all —
+  because migrate container is the only schema authority), core/sod_engine.py
+  (violations_for_identities: 3 queries then set intersection),
+  routers/sod.py (/api/sod/rules CRUD, CertAdminUser, append_audit
+  same-transaction: sod_rule_created/updated/deleted).
+- Wired: campaign preview returns sod {identities_flagged, accounts_flagged}
+  + per-sample-item sod_violations; review detail returns sod_violations.
+- Frontend: SodRules.tsx (/sod, admin nav) create/toggle/delete rules;
+  CampaignDetail preview sample is now a table with SoD badges per row.
+  tsc clean, vite build into backend/static/.
+- Tests 12/12 (was 8): test_sod_rules (CRUD validation + audit chain for
+  rule writes + 401s), test_sod_e2e (violating identity across TWO sources
+  — one account carries one entitlement ref, so a toxic pair needs two
+  accounts — preview flags with named pair, review detail shows, approve
+  stays manual, inactive rule flags nothing).
+- LIVE PROOFS: migration 0002 applied on the EXISTING volume without down
+  -v (psql: alembic_version=0002, sod_rules table present) — the [H] from
+  the secrets session is now [V]. smoke.sh PASS incl. kill-a-replica.
+  scripts/live_sod_check.py: login -> GET rules -> POST rejected 400 ->
+  chain valid, against real Postgres.
+- Trap (recurring): file_editor corrupted a line in routers/sod.py
+  (walrus-junk in delete_rule) — caught on read-back, fixed. Also wrote an
+  unfinished stub test the first time. Post-write verification stays
+  mandatory. Migrate container's alembic output is swallowed by a broken
+  log format (`%(levelname)` lines) — prove migrations via psql, not logs.
+- Commit 83bc69d. Stack running @ :8090, 6 commits total.
+- Next candidates: reminder-email task queue, external chain anchoring,
+  real LDAP/Entra connectors, rule deactivation UI polish.
+
 ### 2026-08-17 (secrets session — candidate #1 done)
 - All hardcoded dev secrets removed from tracked files. compose.yaml uses
   ${VAR:?err} for IAG_POSTGRES_PASSWORD / IAG_APP_DB_PASSWORD /

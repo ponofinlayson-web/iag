@@ -6,13 +6,18 @@ services:
     container_name: iag-db
     environment:
       POSTGRES_USER: iag_migrate
-      POSTGRES_PASSWORD: migrate_dev_password
+      IAG_APP_DB_PASSWORD: ${IAG_APP_DB_PASSWORD:?set IAG_APP_DB_PASSWORD in .env}
+      # ${VAR:?err} = compose refuses to start without .env -- no silent defaults
+      POSTGRES_PASSWORD: ${IAG_POSTGRES_PASSWORD:?set IAG_POSTGRES_PASSWORD in .env}
       POSTGRES_DB: iag
     volumes:
       - iag_pgdata:/var/lib/postgresql/data
-      - ./deploy/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql:ro
+      - ./deploy/initdb.sh:/docker-entrypoint-initdb.d/initdb.sh:ro
+      - ./deploy/initdb.sql:/opt/initdb/initdb.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U iag_migrate -d iag"]
+      # Contract check: accepting connections is NOT enough — initdb.sh failures
+      # are swallowed by the postgres entrypoint, so assert iag_app exists too.
+      test: ["CMD-SHELL", "pg_isready -U iag_migrate -d iag && psql -U iag_migrate -d iag -tAc \"SELECT 1 FROM pg_roles WHERE rolname='iag_app'\" | grep -q 1"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -29,10 +34,10 @@ services:
     command: sh -c "/app/.venv/bin/alembic upgrade head && /app/.venv/bin/python -m app.bootstrap && cp -r /app/static/. /shared-static/"
     user: root
     environment:
-      IAG_DATABASE_URL: postgresql+asyncpg://iag_migrate:migrate_dev_password@iag-db:5432/iag
-      IAG_SECRET_KEY: dev-stack-secret-key-32-chars-minimum-0123456789
+      IAG_DATABASE_URL: postgresql+asyncpg://iag_migrate:${IAG_POSTGRES_PASSWORD:?set IAG_POSTGRES_PASSWORD in .env}@iag-db:5432/iag
+      IAG_SECRET_KEY: ${IAG_SECRET_KEY:?set IAG_SECRET_KEY in .env}
       IAG_ENV: development
-      IAG_BOOTSTRAP_ADMIN_PASSWORD: ${IAG_BOOTSTRAP_ADMIN_PASSWORD:-Admin123!secret}
+      IAG_BOOTSTRAP_ADMIN_PASSWORD: ${IAG_BOOTSTRAP_ADMIN_PASSWORD:?set IAG_BOOTSTRAP_ADMIN_PASSWORD in .env}
     volumes:
       - iag_static:/shared-static
     depends_on:
@@ -45,8 +50,8 @@ services:
     build: .
     container_name: iag-app-1
     environment: &appenv
-      IAG_DATABASE_URL: postgresql+asyncpg://iag_app:app_dev_password@iag-db:5432/iag
-      IAG_SECRET_KEY: dev-stack-secret-key-32-chars-minimum-0123456789
+      IAG_DATABASE_URL: postgresql+asyncpg://iag_app:${IAG_APP_DB_PASSWORD:?set IAG_APP_DB_PASSWORD in .env}@iag-db:5432/iag
+      IAG_SECRET_KEY: ${IAG_SECRET_KEY:?set IAG_SECRET_KEY in .env}
       IAG_ENV: development
     depends_on:
       iag-db:

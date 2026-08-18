@@ -4,9 +4,17 @@
 #   still verifies -> replica restarts and rejoins.
 set -euo pipefail
 
-BASE_URL="${BASE_URL:-http://localhost:8080}"
+BASE_URL="${BASE_URL:-http://localhost:8090}"
 ADMIN_USER="${IAG_BOOTSTRAP_ADMIN_USERNAME:-admin}"
-ADMIN_PASS="${IAG_BOOTSTRAP_ADMIN_PASSWORD:-Admin123!secret}"
+
+# Secrets come from the gitignored .env (same file compose uses); never
+# hardcoded here. Password has NO fallback: fail loud if .env is missing.
+ENV_FILE="${ENV_FILE:-$(dirname "$0")/../.env}"
+if [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+fi
+: "${IAG_BOOTSTRAP_ADMIN_PASSWORD:?IAG_BOOTSTRAP_ADMIN_PASSWORD missing (set it in .env; see .env.example)}"
 
 say()  { printf '\n== %s\n' "$*"; }
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
@@ -23,7 +31,7 @@ curl -fsS "$BASE_URL/" | grep -q 'id="root"'
 say "2. login + audit chain verifies"
 curl -fsS -c /tmp/iag_smoke.jar \
   -H 'Content-Type: application/json' \
-  -d "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASS\"}" \
+  -d "{\"username\":\"$ADMIN_USER\",\"password\":\"$IAG_BOOTSTRAP_ADMIN_PASSWORD\"}" \
   "$BASE_URL/api/auth/login" | grep -q '"ok":true'
 curl -fsS -b /tmp/iag_smoke.jar "$BASE_URL/api/audit/verify" | grep -q '"valid":true'
 

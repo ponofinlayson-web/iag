@@ -1,0 +1,9 @@
+# Shell scripts and env templates MUST stay LF: the postgres entrypoint and
+# compose .env parsing break on CRLF (git on Windows would otherwise
+# re-convert them on checkout when core.autocrlf=true).
+*.sh text eol=lf
+*.env text eol=lf
+.env.example text eol=lf
+
+# Everything else: normalize in repo, checkout native.
+* text=auto

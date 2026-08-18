@@ -114,8 +114,9 @@ Nothing. All six build phases complete and verified this session.
   mandatory. Migrate container's alembic output is swallowed by a broken
   log format (`%(levelname)` lines) — prove migrations via psql, not logs.
 - Commit 83bc69d. Stack running @ :8090, 6 commits total.
-- Next candidates: reminder-email task queue, external chain anchoring,
-  real LDAP/Entra connectors, rule deactivation UI polish.
+- Next up: reminder-email task queue — pinned constraints + open design
+  fork in the section below. Later: external chain anchoring, real
+  LDAP/Entra connectors, rule deactivation UI polish.
 
 ### 2026-08-17 (secrets session — candidate #1 done)
 - All hardcoded dev secrets removed from tracked files. compose.yaml uses
@@ -193,6 +194,42 @@ Nothing. All six build phases complete and verified this session.
 - Corruption guard still real: ~6 new junk-marker incidents this session
   (.ts-holder, TS_TH_MARK, router_page_guard_fn, .ts-review-id etc.),
   all caught by post-write verification + tsc. Keep writes ≤120 lines.
+
+## Reminder-email task queue — constraints pinned (2026-08-17, pre-build)
+
+Contract comes from the frozen specs; do not re-derive:
+- ARCHITECTURE.md slot: "Email: outbound only, via an in-app task queue.
+  Never a writer." Resilience contract 4: "No cron, no schedulers, no
+  sidecars with write credentials. Future reminder emails must run inside
+  an app replica as a task queue, never as a separate writer."
+- REQUIREMENTS.md: email templates/delivery were DEFERRED from v1 (kept as
+  design slot), reminder emails are the v2 build of that slot. So:
+  outbound only, no inbound processing, no read receipts.
+- Multi-replica reality: 3 app replicas; whatever picks up reminder work
+  must be safe with all three running (idempotent claim semantics or
+  single-flight locking). Sessions/cookies are stateless; nothing shared
+  but Postgres.
+
+Design fork left OPEN for the next session (both preserve the contract):
+- A. DB table `email_outbox` + a periodic in-replica worker loop (asyncio
+  task started at app startup) that claims due rows and sends. Claim via
+  `UPDATE ... WHERE status='pending' ... RETURNING` or SELECT FOR UPDATE
+  SKIP LOCKED so replicas don't double-send.
+- B. Recompute-don't-persist: compute who needs reminding on the fly from
+  reviews pending + deadline, no outbox table, send directly. Simpler, no
+  new state, but no retry/dedup record and every replica might send.
+
+My recommendation (not yet user-ratified): A with a strict minimal shape —
+outbox table written ONLY by the API on campaign start/schedule change,
+worker claims with SKIP LOCKED, SMTP settings via IAG_* env (fail-fast
+like other secrets), audit entry on send attempt or per batch. But the
+user is a novice vibe-coder who values being told when something is
+fragile: present A vs B honestly, let them pick.
+
+Regardless of fork: SMTP creds are secrets (.env, gitignored, gen_env.py
+updated), delivery is outbound only, no scheduler sidecar, migrate
+container owns any new table's migration, tests run on SQLite with no
+real SMTP (stub/fakemail capture), py_compile gate on every write.
 
 ## Known design decisions (context you'd otherwise lack)
 

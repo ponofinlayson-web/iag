@@ -53,6 +53,14 @@ services:
       IAG_DATABASE_URL: postgresql+asyncpg://iag_app:${IAG_APP_DB_PASSWORD:?set IAG_APP_DB_PASSWORD in .env}@iag-db:5432/iag
       IAG_SECRET_KEY: ${IAG_SECRET_KEY:?set IAG_SECRET_KEY in .env}
       IAG_ENV: development
+      # Reminder worker knobs; ${VAR:-default} keeps bare `docker compose up`
+      # working while letting .env speed up local proofs.
+      IAG_REMINDER_DELAY_MINUTES: ${IAG_REMINDER_DELAY_MINUTES:-60}
+      IAG_REMINDER_POLL_SECONDS: ${IAG_REMINDER_POLL_SECONDS:-60}
+      IAG_REMINDER_MAX_ATTEMPTS: ${IAG_REMINDER_MAX_ATTEMPTS:-3}
+      IAG_REMINDER_STUCK_MINUTES: ${IAG_REMINDER_STUCK_MINUTES:-15}
+      IAG_REMINDER_BATCH_SIZE: ${IAG_REMINDER_BATCH_SIZE:-25}
+      IAG_SMTP_HOST: ${IAG_SMTP_HOST:-}
     depends_on:
       iag-db:
         condition: service_healthy

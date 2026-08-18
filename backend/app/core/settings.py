@@ -17,6 +17,16 @@ class Settings(BaseSettings):
     bootstrap_admin_username: str = Field(default="admin", alias="IAG_BOOTSTRAP_ADMIN_USERNAME")
     bootstrap_admin_password: str = Field(default="", alias="IAG_BOOTSTRAP_ADMIN_PASSWORD")
     cors_origins: str = Field(default="", alias="IAG_CORS_ORIGINS")
+    reminder_delay_minutes: int = Field(default=60, alias="IAG_REMINDER_DELAY_MINUTES")
+    reminder_poll_seconds: int = Field(default=60, alias="IAG_REMINDER_POLL_SECONDS")
+    reminder_max_attempts: int = Field(default=3, alias="IAG_REMINDER_MAX_ATTEMPTS")
+    reminder_stuck_minutes: int = Field(default=15, alias="IAG_REMINDER_STUCK_MINUTES")
+    reminder_batch_size: int = Field(default=25, alias="IAG_REMINDER_BATCH_SIZE")
+    smtp_host: str = Field(default="", alias="IAG_SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="IAG_SMTP_PORT")
+    smtp_user: str = Field(default="", alias="IAG_SMTP_USER")
+    smtp_password: str = Field(default="", alias="IAG_SMTP_PASSWORD")
+    smtp_from: str = Field(default="", alias="IAG_SMTP_FROM")
     def db_url_sync(self) -> str:
         """Sync driver URL for Alembic and tests."""
         if self.database_url.startswith("sqlite+aiosqlite"):
@@ -39,3 +49,15 @@ class Settings(BaseSettings):
             )
         if len(self.secret_key) < 32:
             raise RuntimeError("IAG_SECRET_KEY must be at least 32 chars")
+    def validate_smtp(self) -> None:
+        """If SMTP is configured, the full credential set must be present.
+        Empty host = dev mode: worker delivers log-only, no SMTP at all."""
+        if not self.smtp_host:
+            return
+        missing = [name for name, val in (
+            ("IAG_SMTP_USER", self.smtp_user),
+            ("IAG_SMTP_PASSWORD", self.smtp_password),
+            ("IAG_SMTP_FROM", self.smtp_from),
+        ) if not val]
+        if missing:
+            raise RuntimeError("IAG_SMTP_HOST set but missing: " + ", ".join(missing))

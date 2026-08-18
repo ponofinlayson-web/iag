@@ -171,6 +171,28 @@ export interface AuditEntryView {
   record_hash: string;
 }
 
+export interface OutboxRow {
+  id: number;
+  campaign_id: number;
+  review_id: number;
+  reviewer_id: number;
+  recipient: string | null;
+  subject: string;
+  due_at: string | null;
+  sent_at: string | null;
+  attempts: number;
+  status: string;
+  last_error: string | null;
+  created_at: string | null;
+}
+
+export interface OutboxPage {
+  items: OutboxRow[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface DashboardData {
   identities: number;
   accounts: number;
@@ -363,6 +385,12 @@ export const api = {
   },
   dashboard: {
     get: () => request<DashboardData>("/api/dashboard"),
+  },
+  reminders: {
+    outbox: (params: { campaign_id?: number; status?: string; page?: number; page_size?: number }) =>
+      request<OutboxPage>("/api/reminders/outbox?" + toQuery(params)),
+    campaign: (campaignId: number, params: { page?: number; page_size?: number }) =>
+      request<OutboxPage & { by_status: Record<string, number> }>(`/api/reminders/campaigns/${campaignId}?` + toQuery(params)),
   },
   sod: {
     rules: () => request<{ items: SodRule[] }>("/api/sod/rules"),

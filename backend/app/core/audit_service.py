@@ -37,8 +37,15 @@ async def append_audit(
     # an unflushed prior append in this transaction would be skipped and the
     # chain would fork. flush() is not commit(); atomicity is preserved.
     await db.flush()
+    # Lock the chain head: concurrent appenders (worker replicas, parallel
+    # requests) must serialize or the chain forks. No-op on SQLite.
     last = (
-        await db.execute(select(AuditEntry).order_by(AuditEntry.id.desc()).limit(1))
+        await db.execute(
+            select(AuditEntry)
+            .order_by(AuditEntry.id.desc())
+            .limit(1)
+            .with_for_update()
+        )
     ).scalars().first()
     prev_hash = last.record_hash if last else GENESIS
     entry = AuditEntry(

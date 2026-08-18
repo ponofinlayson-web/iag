@@ -1,17 +1,18 @@
 """Campaign router: lifecycle, scope, dry-run preview, start."""
 from __future__ import annotations
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from app.core.audit_service import append_audit
 from app.core.sod_engine import violations_for_identities
 from app.models.campaign import Campaign, CampaignStatus, Review, ReviewStatus
-from app.models.identity import Identity
+from app.models.email import EmailOutbox, OutboxStatus
+from app.models.identity import Identity, utcnow
 from app.models.source import Account, DataSource
 from app.models.user import Role, User
-from app.routers.deps import AnyUser, CertAdminUser, DbSession
+from app.routers.deps import AnyUser, CertAdminUser, DbSession, get_settings
 router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
 PRIVILEGED = ("high", "very_high")
 class CampaignIn(BaseModel):
@@ -222,12 +223,15 @@ async def start_campaign(campaign_id: int, db: DbSession, user: CertAdminUser):
         raise HTTPException(404, "Campaign not found")
     if c.status not in (CampaignStatus.STAGED, CampaignStatus.ACTIVE):
         raise HTTPException(409, "Campaign must be staged before start")
+    # Re-start = regenerate: clear prior reviews (outbox rows cascade via FK).
+    await db.execute(delete(Review).where(Review.campaign_id == campaign_id))
     scope = json.loads(c.scope or "{}")
     accounts = await _scoped_accounts(db, scope)
     owners = await _source_owners(db, accounts)
     manager_user = {}
     reviewer_fallback = user
     created, skipped = 0, 0
+    new_reviews: list[tuple[Review, User]] = []
     for a in accounts:
         reviewer = None
         if c.review_mode == "source_owner":
@@ -249,12 +253,34 @@ async def start_campaign(campaign_id: int, db: DbSession, user: CertAdminUser):
                         await db.execute(select(User).where(User.identity_id == mid))
                     ).scalars().first()
                 reviewer = manager_user[mid] or reviewer_fallback
-        db.add(Review(campaign_id=campaign_id, account_id=a.id, reviewer_id=reviewer.id))
+        review = Review(campaign_id=campaign_id, account_id=a.id, reviewer_id=reviewer.id)
+        db.add(review)
+        new_reviews.append((review, reviewer))
         created += 1
+    await db.flush()  # reviews need PKs before the outbox rows reference them
     c.status = CampaignStatus.ACTIVE
+    settings = get_settings()
+    due = utcnow() + timedelta(minutes=settings.reminder_delay_minutes)
+    db.add_all([
+        EmailOutbox(
+            campaign_id=campaign_id,
+            review_id=r.id,
+            reviewer_id=r.reviewer_id,
+            recipient=rev.identity.email if rev.identity else None,
+            subject=f"[IAG] Review reminder: campaign '{c.name}'",
+            body=(f"Hello {rev.identity.first_name or ''}".strip() + ",\n\n"
+                  + f"You have pending access reviews in campaign '{c.name}'.\n"
+                  + "Please sign in to IAG to complete your assigned reviews.\n\n"
+                  + "This is an automated reminder."),
+            due_at=due,
+            status=OutboxStatus.PENDING,
+        )
+        for r, rev in new_reviews
+    ])
     await append_audit(db, actor_id=user.id, actor_username=user.identity.username or "",
                        action="campaign_started", entity_type="campaign", entity_id=campaign_id,
-                       details={"reviews_created": created, "skipped": skipped})
+                       details={"reviews_created": created, "skipped": skipped,
+                                "reminders_enqueued": len(new_reviews)})
     await db.commit()
     return {"reviews_created": created, "skipped": skipped}
 @router.post("/{campaign_id}/cancel")
@@ -265,8 +291,15 @@ async def cancel_campaign(campaign_id: int, db: DbSession, user: CertAdminUser):
     if c.status not in (CampaignStatus.STAGED, CampaignStatus.ACTIVE):
         raise HTTPException(409, "Only staged or active campaigns can be cancelled")
     c.status = CampaignStatus.CANCELLED
+    cancelled = (await db.execute(
+        update(EmailOutbox)
+        .where(EmailOutbox.campaign_id == campaign_id,
+               EmailOutbox.status == OutboxStatus.PENDING)
+        .values(status=OutboxStatus.CANCELLED)
+    )).rowcount
     await append_audit(db, actor_id=user.id, actor_username=user.identity.username or "",
-                       action="campaign_cancelled", entity_type="campaign", entity_id=campaign_id)
+                       action="campaign_cancelled", entity_type="campaign", entity_id=campaign_id,
+                       details={"reminders_cancelled": cancelled})
     await db.commit()
     return {"ok": True, "status": c.status.value}
 @router.get("/{campaign_id}/metrics")

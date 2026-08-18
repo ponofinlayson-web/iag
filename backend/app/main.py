@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.settings import Settings
-from app.routers import audit, auth, campaigns, dashboard, entitlements, identities, reviews, sources
+from app.routers import audit, auth, campaigns, dashboard, entitlements, identities, reviews, sod, sources
 settings = Settings()
 settings.validate_secrets()
 logging.basicConfig(
@@ -32,6 +32,7 @@ app.include_router(sources.router)
 app.include_router(entitlements.router)
 app.include_router(campaigns.router)
 app.include_router(reviews.router)
+app.include_router(sod.router)
 app.include_router(audit.router)
 app.include_router(dashboard.router)
 @app.get("/api/health", tags=["system"])

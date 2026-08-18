@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from app.core.audit_service import append_audit
+from app.core.sod_engine import violations_for_identities
 from app.models.campaign import Campaign, CampaignStatus, Review, ReviewStatus
 from app.models.identity import Identity
 from app.models.source import Account, DataSource
@@ -159,6 +160,7 @@ async def preview_campaign(campaign_id: int, db: DbSession, user: CertAdminUser)
     scope = json.loads(c.scope or "{}")
     accounts = await _scoped_accounts(db, scope)
     owners = await _source_owners(db, accounts)
+    account_by_id = {a.id: a for a in accounts}
     included, skipped = [], []
     for a in accounts:
         if c.review_mode == "source_owner":
@@ -187,8 +189,19 @@ async def preview_campaign(campaign_id: int, db: DbSession, user: CertAdminUser)
                 included.append({"account_id": a.id, "reviewer": "fallback:creator"})
                 continue
             included.append({"account_id": a.id, "reviewer": mgr.identity.username})
+    sod = await violations_for_identities(
+        db, {a.identity_id for a in accounts if a.identity_id}
+    )
+    violating_identities = set(sod)
+    for item in included:
+        a = account_by_id.get(item["account_id"])
+        if a is not None and a.identity_id in violating_identities:
+            item["sod_violations"] = sod[a.identity_id]
     return {"total_in_scope": len(accounts), "will_create": len(included),
-            "skipped": skipped[:100], "sample": included[:50]}
+            "skipped": skipped[:100], "sample": included[:50],
+            "sod": {"identities_flagged": len(violating_identities),
+                    "accounts_flagged": sum(1 for i in included
+                                            if i.get("sod_violations"))}}
 @router.post("/{campaign_id}/stage")
 async def stage_campaign(campaign_id: int, db: DbSession, user: CertAdminUser):
     c = await db.get(Campaign, campaign_id)

@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { CampaignDetail as CD } from "../api/client";
+import type { CampaignDetail as CD, SodViolation } from "../api/client";
 import { Badge, Card, errMsg, statusTone } from "../components/ui";
 
 interface Preview {
   total_in_scope: number;
   will_create: number;
   skipped: Array<{ account_id: number; account_value: string; reason: string }>;
-  sample: Array<{ account_id: number; reviewer: string }>;
+  sample: Array<{ account_id: number; reviewer: string; sod_violations?: SodViolation[] }>;
+  sod: { identities_flagged: number; accounts_flagged: number };
 }
 
 interface Metrics {
@@ -106,6 +107,16 @@ export default function CampaignDetail() {
       </Card>
       {preview && (
         <Card title={`DRY-RUN preview — ${preview.will_create} of ${preview.total_in_scope} in scope`}>
+          {preview.sod.identities_flagged > 0 ? (
+            <p>
+              <Badge tone="bad">SoD</Badge> {preview.sod.identities_flagged} identit
+              {preview.sod.identities_flagged === 1 ? "y" : "ies"} flagged ·{" "}
+              {preview.sod.accounts_flagged} account
+              {preview.sod.accounts_flagged === 1 ? "" : "s"} affected (see sample below)
+            </p>
+          ) : (
+            <p className="empty">No SoD violations in scope.</p>
+          )}
           {preview.skipped.length > 0 ? (
             <table>
               <thead>
@@ -127,7 +138,38 @@ export default function CampaignDetail() {
             <p className="empty">All in-scope accounts will get a review. No skips.</p>
           )}
           {preview.sample.length > 0 && (
-            <p className="muted">Sample reviewers: {preview.sample.map((s) => s.reviewer).slice(0, 8).join(", ")}</p>
+            <div>
+              <h3>Sample (first {preview.sample.length})</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Account</th>
+                    <th>Reviewer</th>
+                    <th>SoD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.sample.map((s) => (
+                    <tr key={s.account_id}>
+                      <td>#{s.account_id}</td>
+                      <td>{s.reviewer}</td>
+                      <td>
+                        {s.sod_violations?.length ? (
+                          s.sod_violations.map((v) => (
+                            <div key={v.rule_id}>
+                              <Badge tone="bad">SoD</Badge>{" "}
+                              {v.rule_name}: {v.entitlement_a} + {v.entitlement_b} ({v.severity})
+                            </div>
+                          ))
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
       )}

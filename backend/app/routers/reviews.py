@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from app.core.audit_service import append_audit
+from app.core.sod_engine import violations_for_identities
 from app.models.campaign import Campaign, CampaignStatus, Review, ReviewStatus
 from app.models.identity import Identity, utcnow
 from app.models.source import Account
@@ -98,6 +99,10 @@ async def get_review(review_id: int, db: DbSession, user: AnyUser):
     if r.reviewer_id != user.id and user.role.value not in ("system_admin", "certification_admin", "auditor"):
         raise HTTPException(403, "Not your review")
     ident = await db.get(Identity, a.identity_id) if a.identity_id else None
+    sod_violations = []
+    if ident is not None:
+        sod = await violations_for_identities(db, [ident.id])
+        sod_violations = sod.get(ident.id, [])
     return {
         "id": r.id,
         "campaign_id": c.id, "campaign_name": c.name,
@@ -106,6 +111,7 @@ async def get_review(review_id: int, db: DbSession, user: AnyUser):
         "privilege_level": a.privilege_level,
         "identity_employee_id": ident.employee_id if ident else None,
         "identity_name": f"{ident.first_name} {ident.last_name}" if ident else None,
+        "sod_violations": sod_violations,
         "status": r.status.value,
         "decision": r.decision,
         "comments": r.comments,

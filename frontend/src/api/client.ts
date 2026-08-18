@@ -124,9 +124,40 @@ export interface ReviewDetail {
   privilege_level: string | null;
   identity_employee_id: string | null;
   identity_name: string | null;
+  sod_violations: SodViolation[];
   status: string;
   decision: string | null;
   comments: string | null;
+}
+
+export interface SodViolation {
+  rule_id: number;
+  rule_name: string;
+  severity: string;
+  entitlement_a: string;
+  entitlement_b: string;
+}
+
+export interface SodRule {
+  id: number;
+  name: string;
+  description: string | null;
+  entitlement_a_id: number;
+  entitlement_b_id: number;
+  entitlement_a_name: string | null;
+  entitlement_b_name: string | null;
+  severity: string;
+  is_active: boolean;
+  created_at: string | null;
+}
+
+export interface SodRuleInput {
+  name: string;
+  description?: string | null;
+  entitlement_a_id: number;
+  entitlement_b_id: number;
+  severity?: string;
+  is_active?: boolean;
 }
 
 export interface AuditEntryView {
@@ -183,6 +214,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+export interface CampaignPreviewItem {
+  account_id: number;
+  reviewer: string;
+  sod_violations?: SodViolation[];
+}
+
+export interface CampaignPreview {
+  total_in_scope: number;
+  will_create: number;
+  skipped: Array<{ account_id: number; account_value: string; reason: string }>;
+  sample: CampaignPreviewItem[];
+  sod: { identities_flagged: number; accounts_flagged: number };
 }
 
 export interface CampaignInput {
@@ -283,10 +328,7 @@ export const api = {
       request<{ ok: boolean }>(`/api/campaigns/${id}`, { method: "PUT", body: JSON.stringify(input) }),
     remove: (id: number) => request<{ ok: boolean }>(`/api/campaigns/${id}`, { method: "DELETE" }),
     preview: (id: number) =>
-      request<{ total_in_scope: number; will_create: number; skipped: Array<{ account_id: number; account_value: string; reason: string }>; sample: Array<{ account_id: number; reviewer: string }> }>(
-        `/api/campaigns/${id}/preview`,
-        { method: "POST" },
-      ),
+      request<CampaignPreview>(`/api/campaigns/${id}/preview`, { method: "POST" }),
     stage: (id: number) => request<{ ok: boolean; status: string }>(`/api/campaigns/${id}/stage`, { method: "POST" }),
     start: (id: number) => request<{ reviews_created: number; skipped: number }>(`/api/campaigns/${id}/start`, { method: "POST" }),
     cancel: (id: number) => request<{ ok: boolean; status: string }>(`/api/campaigns/${id}/cancel`, { method: "POST" }),
@@ -321,6 +363,21 @@ export const api = {
   },
   dashboard: {
     get: () => request<DashboardData>("/api/dashboard"),
+  },
+  sod: {
+    rules: () => request<{ items: SodRule[] }>("/api/sod/rules"),
+    createRule: (input: SodRuleInput) =>
+      request<{ id: number; name: string }>("/api/sod/rules", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    updateRule: (id: number, input: SodRuleInput) =>
+      request<{ ok: boolean }>(`/api/sod/rules/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(input),
+      }),
+    deleteRule: (id: number) =>
+      request<{ ok: boolean }>(`/api/sod/rules/${id}`, { method: "DELETE" }),
   },
 };
 

@@ -114,8 +114,8 @@ Nothing. All six build phases complete and verified this session.
   mandatory. Migrate container's alembic output is swallowed by a broken
   log format (`%(levelname)` lines) — prove migrations via psql, not logs.
 - Commit 83bc69d. Stack running @ :8090, 6 commits total.
-- Next up: reminder-email task queue — pinned constraints + open design
-  fork in the section below. Later: external chain anchoring, real
+- Next up: reminder-email task queue — fork A RATIFIED by user;
+  full build spec in the section below. Later: chain anchoring, real
   LDAP/Entra connectors, rule deactivation UI polish.
 
 ### 2026-08-17 (secrets session — candidate #1 done)
@@ -195,7 +195,7 @@ Nothing. All six build phases complete and verified this session.
   (.ts-holder, TS_TH_MARK, router_page_guard_fn, .ts-review-id etc.),
   all caught by post-write verification + tsc. Keep writes ≤120 lines.
 
-## Reminder-email task queue — constraints pinned (2026-08-17, pre-build)
+## Reminder-email task queue — FORK A RATIFIED (2026-08-17, pre-build)
 
 Contract comes from the frozen specs; do not re-derive:
 - ARCHITECTURE.md slot: "Email: outbound only, via an in-app task queue.
@@ -210,26 +210,66 @@ Contract comes from the frozen specs; do not re-derive:
   single-flight locking). Sessions/cookies are stateless; nothing shared
   but Postgres.
 
-Design fork left OPEN for the next session (both preserve the contract):
+DECISION (user-ratified 2026-08-17): fork A. Do not present A-vs-B again;
+build A. Spec follows; the constraints block above it still applies.
 - A. DB table `email_outbox` + a periodic in-replica worker loop (asyncio
   task started at app startup) that claims due rows and sends. Claim via
   `UPDATE ... WHERE status='pending' ... RETURNING` or SELECT FOR UPDATE
   SKIP LOCKED so replicas don't double-send.
-- B. Recompute-don't-persist: compute who needs reminding on the fly from
-  reviews pending + deadline, no outbox table, send directly. Simpler, no
-  new state, but no retry/dedup record and every replica might send.
+Full fork-A build spec:
 
-My recommendation (not yet user-ratified): A with a strict minimal shape —
-outbox table written ONLY by the API on campaign start/schedule change,
-worker claims with SKIP LOCKED, SMTP settings via IAG_* env (fail-fast
-like other secrets), audit entry on send attempt or per batch. But the
-user is a novice vibe-coder who values being told when something is
-fragile: present A vs B honestly, let them pick.
+Model — `EmailOutbox` (models/email.py, table `email_outbox`, migration
+0003, explicit DDL like 0002):
+- id PK; campaign_id FK campaigns CASCADE; review_id FK reviews CASCADE
+  (one reminder per review — the natural dedup key); reviewer_id FK
+  users CASCADE; recipient TEXT (resolved at enqueue time); subject TEXT;
+  body TEXT; due_at TIMESTAMP naive-UTC; sent_at TIMESTAMP null;
+  attempts INTEGER default 0; status TEXT pending/sending/sent/failed/
+  cancelled.
+- Enqueue: on campaign start ONLY (v1): one pending row per review
+  created, due_at = now + IAG_REMINDER_DELAY_MINUTES (default 60).
+  Campaign cancel marks outstanding pending rows cancelled.
 
-Regardless of fork: SMTP creds are secrets (.env, gitignored, gen_env.py
-updated), delivery is outbound only, no scheduler sidecar, migrate
-container owns any new table's migration, tests run on SQLite with no
-real SMTP (stub/fakemail capture), py_compile gate on every write.
+Worker — `app/core/email_worker.py`, asyncio task per replica started
+at app startup (FastAPI lifespan in main.py):
+- Loop: sleep IAG_REMINDER_POLL_SECONDS (default 60) → claim due rows →
+  send → finalize. 
+- Claim: SELECT ... FOR UPDATE SKIP LOCKED on Postgres (multi-replica
+  safe); SQLite tests serialize, acceptable. Claim TX marks rows
+  'sending' + attempts+1. SEND HAPPENS OUTSIDE THE CLAIM TX (network
+  I/O never holds DB locks); finalize TX commits sent/failed. Replica
+  death between claim and finalize leaves rows 'sending'; reclaim after
+  IAG_REMINDER_STUCK_MINUTES (default 15).
+- Retry: failed sends retry next poll up to IAG_REMINDER_MAX_ATTEMPTS
+  (default 3), then dead-letter (status stays 'failed').
+- Send: SMTP via IAG_SMTP_HOST/PORT/USER/PASSWORD/FROM. DEV MODE: host
+  unset → log-only delivery (log the email, mark sent) — how the stack
+  runs today; keeps smoke honest without an SMTP server. If host IS set,
+  creds validated at boot (fail-fast, secrets discipline).
+- Audit: one 'email_sent' entry per delivered row via append_audit
+  (same-transaction, house pattern). Failed attempts get 'email_failed'
+  entries; actor = system (actor_id None, actor_username 'system').
+
+API surface (read-only, CertAdminUser):
+- GET /api/reminders/outbox — paged, filter campaign_id + status
+- GET /api/campaigns/{id}/reminders — rows for one campaign
+
+Tests (SQLite, log-only send path; no real SMTP):
+- enqueue-on-start: start creates one pending row per review, due_at ok
+- claim-and-send: due row → sent, audit 'email_sent', sent_at set
+- no-double-send: second claim returns nothing (SKIP LOCKED proven on
+  Postgres via live script)
+- retry-then-dead-letter: failures retry to max attempts then stop
+- cancel-cancels: campaign cancel → outstanding rows cancelled
+- boot: worker task starts with TestClient context, no error
+
+Live proof (stack): scripts/live_reminder_check.py — login → start
+campaign with pending reviews → outbox rows exist via API → wait for
+sent (log-only) → audit chain still valid.
+
+Non-goals (do not build): templates/editing UI, HTML email, inbound
+mail, read receipts, per-reviewer digesting, email prefs. One plain-
+text reminder per pending review, one time, v1.
 
 ## Known design decisions (context you'd otherwise lack)
 

@@ -48,8 +48,21 @@ def build_send_fn(settings) -> SendFn:
         msg["Subject"] = row.subject
         msg.set_content(row.body)
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as s:
-            s.starttls()
-            s.login(settings.smtp_user, settings.smtp_password)
+            s.ehlo()
+            # STARTTLS when offered; plaintext only when the relay has none,
+            # with a loud log. Never silently downgrades: a relay that offers
+            # STARTTLS always gets it.
+            if s.has_extn("starttls"):
+                s.starttls()
+                s.ehlo()  # STARTTLS resets session state; features must be re-read
+            else:
+                logger.warning("SMTP %s:%s offers no STARTTLS; sending plaintext",
+                               settings.smtp_host, settings.smtp_port)
+            if settings.smtp_user and s.has_extn("auth"):
+                s.login(settings.smtp_user, settings.smtp_password)
+            elif settings.smtp_user:
+                logger.warning("SMTP %s offers no AUTH; skipping login",
+                               settings.smtp_host)
             s.send_message(msg)
 
     return smtp_send

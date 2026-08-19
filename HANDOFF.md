@@ -88,9 +88,53 @@ uv.lock + .venv exist — `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Nothing. All six build phases + SoD + reminder-email fork A complete and verified.
+Nothing broken. Deferred-features arc ratified and in progress (1/6 shipped).
+Pending decisions: fresh-volume reset proof before feature 2's migration;
+design specs required before features 3-6 (no reserved slots).
 
 ## Session log (newest first)
+
+
+### 2026-08-18 (deferred-arc session 1 - FEATURE 1 SHIPPED)
+
+Context: user ratified the full deferred-features arc (menu items 1-6, in
+order). Feature 1 = email templates (delivery already existed in fork A).
+
+Shipped (3 commits on master):
+- d90dd63 templates: app/core/email_templates.py (code-stored Jinja2 registry,
+  StrictUndefined, empty-subject guard, render-at-enqueue -> template failure
+  is a 400 at campaign start, never a worker dead-letter). campaigns.py routes
+  composition through render_email; new IAG_APP_BASE_URL setting (default
+  http://localhost:8090) builds review_url; uv add jinja2. Tests 19->27.
+- b50cf71 SMTP hardening + proof tooling: adaptive STARTTLS/AUTH (ehlo ->
+  starttls-if-offered with re-ehlo after [STARTTLS resets esmtp_features;
+  has_extn("auth") would silently skip login], loud warning when relay offers
+  neither), scripts/smtp_sink.py (aiosmtpd dev sink, bind 127.0.0.1 —
+  aiosmtpd probes `hostname`, 0.0.0.0 invalid on Windows; Docker Desktop
+  proxies host.docker.internal to host loopback), scripts/live_smtp_proof.py.
+- 4decb98 proof-harness fixes: unique source/campaign names (live DB carries
+  history — hardcoded names collide on rerun), expected count derived from
+  start response, greeting assert CRLF-tolerant + name-agnostic (live admin
+  is "System", fixture is "Ada"; SMTP wire is \r\n). compose.yaml now maps
+  IAG_SMTP_PORT/USER/PASSWORD/FROM into app env (only HOST was mapped;
+  validate_smtp correctly refused boot on the gap — fail-fast worked).
+
+Proofs: pytest 27/27; live E2E PASS — 9 emails through REAL SMTP branch to
+aiosmtpd sink on live Postgres, rendered subject/URL/greeting asserted in
+sink log, outbox all sent, audit chain valid. First-ever exercise of the
+SMTP branch.
+
+Post-proof state: .env SMTP block REMOVED (log-only restored — next campaign
+won't dead-letter against a dead sink). Re-enable for proofs: append 5 lines
+(IAG_SMTP_HOST=host.docker.internal, PORT=1025, USER/PASSWORD=any, FROM=
+iag@localhost), start sink (uv run --with aiosmtpd python scripts/smtp_sink.py
+D:\Projects\iag\smtp_sink_log.jsonl 1025), docker compose up -d, then
+scripts/live_smtp_proof.py.
+
+Arc status: 1/6 done. Next: feature 2 (live connectors) — needs migration
+0004, so do the fresh-volume reset proof (0003 on empty volume) FIRST.
+Remaining arc order: 3 remediation, 4 API keys, 5 risk/PDF/SIEM, 6 SCIM etc
+(design conversation required before 3-6; no reserved slots for them).
 
 ### 2026-08-17 (reminder-email session - FORK A SHIPPED)
 

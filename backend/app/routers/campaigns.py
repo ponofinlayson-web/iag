@@ -6,6 +6,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, update
 from app.core.audit_service import append_audit
+from app.core.email_templates import (
+    TemplateRenderError,
+    build_review_url,
+    render_email,
+)
 from app.core.sod_engine import violations_for_identities
 from app.models.campaign import Campaign, CampaignStatus, Review, ReviewStatus
 from app.models.email import EmailOutbox, OutboxStatus
@@ -261,21 +266,29 @@ async def start_campaign(campaign_id: int, db: DbSession, user: CertAdminUser):
     c.status = CampaignStatus.ACTIVE
     settings = get_settings()
     due = utcnow() + timedelta(minutes=settings.reminder_delay_minutes)
+    # Render at enqueue: a template failure is a 400 here, not a dead email later
+    try:
+        rendered = [
+            render_email("review_reminder",
+                         first_name=(rev.identity.first_name if rev.identity else "") or "reviewer",
+                         campaign_name=c.name,
+                         review_url=build_review_url(campaign_id))
+            for r, rev in new_reviews
+        ]
+    except TemplateRenderError as exc:
+        raise HTTPException(400, str(exc)) from exc
     db.add_all([
         EmailOutbox(
             campaign_id=campaign_id,
             review_id=r.id,
             reviewer_id=r.reviewer_id,
             recipient=rev.identity.email if rev.identity else None,
-            subject=f"[IAG] Review reminder: campaign '{c.name}'",
-            body=(f"Hello {rev.identity.first_name or ''}".strip() + ",\n\n"
-                  + f"You have pending access reviews in campaign '{c.name}'.\n"
-                  + "Please sign in to IAG to complete your assigned reviews.\n\n"
-                  + "This is an automated reminder."),
+            subject=subject,
+            body=body,
             due_at=due,
             status=OutboxStatus.PENDING,
         )
-        for r, rev in new_reviews
+        for (r, rev), (subject, body) in zip(new_reviews, rendered)
     ])
     await append_audit(db, actor_id=user.id, actor_username=user.identity.username or "",
                        action="campaign_started", entity_type="campaign", entity_id=campaign_id,

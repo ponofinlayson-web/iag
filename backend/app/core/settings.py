@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     reminder_max_attempts: int = Field(default=3, alias="IAG_REMINDER_MAX_ATTEMPTS")
     reminder_stuck_minutes: int = Field(default=15, alias="IAG_REMINDER_STUCK_MINUTES")
     reminder_batch_size: int = Field(default=25, alias="IAG_REMINDER_BATCH_SIZE")
+    app_base_url: str = Field(default="http://localhost:8090", alias="IAG_APP_BASE_URL")
     smtp_host: str = Field(default="", alias="IAG_SMTP_HOST")
     smtp_port: int = Field(default=587, alias="IAG_SMTP_PORT")
     smtp_user: str = Field(default="", alias="IAG_SMTP_USER")

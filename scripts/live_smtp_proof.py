@@ -66,7 +66,8 @@ assert st == 200, f"login {st}"
 st, _ = upload("/api/identities/import", "people.csv", PEOPLE)
 assert st == 200, f"import {st}"
 st, src = call("POST", "/api/sources",
-               {"name": "SmtpSrc", "source_type": "csv", "owner_employee_id": "E-ADMIN"})
+               {"name": f"SmtpSrc-{int(time.time())}", "source_type": "csv",
+                "owner_employee_id": "E-ADMIN"})
 assert st == 200, f"source {st}: {src}"
 sid = src["id"]
 st, _ = upload(f"/api/sources/{sid}/upload", "accounts.csv", ACCOUNTS)
@@ -74,14 +75,16 @@ assert st == 200, f"upload {st}"
 st, _ = call("POST", f"/api/sources/{sid}/accounts/bulk-link", {"match_on": "username"})
 assert st == 200, f"link {st}"
 
+campaign_name = f"SmtpProof-{int(time.time())}"
 st, c = call("POST", "/api/campaigns",
-             {"name": "SmtpProof", "review_mode": "source_owner"})
+             {"name": campaign_name, "review_mode": "source_owner"})
 assert st == 200, f"campaign {st}: {c}"
 cid = c["id"]
 st, _ = call("POST", f"/api/campaigns/{cid}/stage")
 assert st == 200, f"stage {st}"
 st, r = call("POST", f"/api/campaigns/{cid}/start")
 assert st == 200, f"start {st}: {r}"
+expected = r["reviews_created"]  # live DB carries history; never hardcode counts
 
 print(f"campaign {cid} started; polling outbox...")
 rows = []
@@ -98,14 +101,18 @@ assert rows and all(x["status"] == "sent" for x in rows), \
 
 with open(SINK_LOG, encoding="utf-8") as f:
     msgs = [json.loads(line) for line in f]
-mine = [m for m in msgs if f"campaign '{'SmtpProof'}'" in m["data"]]
-assert len(mine) == 2, f"sink saw {len(mine)} SmtpProof messages, want 2"
+cname = f"campaign '{campaign_name}'"
+mine = [m for m in msgs if cname in m["data"]]
+assert len(mine) == expected, f"sink saw {len(mine)} {campaign_name} messages, want {expected}"
+import re
 for m in mine:
     assert f"/reviews?campaign={cid}" in m["data"], "body missing review URL"
-    assert "Hello Ada," in m["data"], "body missing rendered greeting"
+    # live bootstrap admin's name differs from the test fixture's; assert shape
+    assert re.search(r"^Hello .+,\r?$", m["data"], re.MULTILINE), \
+        "body missing rendered greeting line"
 
 st, v = call("GET", "/api/audit/verify")
 assert st == 200 and v["valid"] is True, f"audit verify {st}: {v}"
 
-print("PASS: 2 emails through real SMTP -> sink; rendered subject/URL/greeting; "
-      "outbox sent; audit chain valid")
+print(f"PASS: {expected} emails through real SMTP -> sink; rendered subject/URL/"
+      "greeting; outbox sent; audit chain valid")

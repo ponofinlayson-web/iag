@@ -27,7 +27,10 @@ class Sink:
         return "250 OK"
 
 
-Controller(Sink(), hostname="0.0.0.0", port=PORT).start()
+# 127.0.0.1 not 0.0.0.0: Docker Desktop's host.docker.internal proxies to host
+# loopback, and aiosmtpd's health probe connects to `hostname` (invalid for
+# 0.0.0.0 on Windows).
+Controller(Sink(), hostname="127.0.0.1", port=PORT).start()
 print(f"sink listening on 0.0.0.0:{PORT}, logging to {LOG}", flush=True)
 try:
     asyncio.get_event_loop().run_forever()

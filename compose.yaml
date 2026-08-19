@@ -61,6 +61,10 @@ services:
       IAG_REMINDER_STUCK_MINUTES: ${IAG_REMINDER_STUCK_MINUTES:-15}
       IAG_REMINDER_BATCH_SIZE: ${IAG_REMINDER_BATCH_SIZE:-25}
       IAG_SMTP_HOST: ${IAG_SMTP_HOST:-}
+      IAG_SMTP_PORT: ${IAG_SMTP_PORT:-587}
+      IAG_SMTP_USER: ${IAG_SMTP_USER:-}
+      IAG_SMTP_PASSWORD: ${IAG_SMTP_PASSWORD:-}
+      IAG_SMTP_FROM: ${IAG_SMTP_FROM:-}
     depends_on:
       iag-db:
         condition: service_healthy

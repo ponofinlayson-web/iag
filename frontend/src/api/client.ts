@@ -54,6 +54,32 @@ export interface Source {
   is_active: boolean;
   account_count: number;
   unlinked_count: number;
+  connector?: ConnectorBlock;
+}
+
+export interface ConnectorBlock {
+  configured: boolean;
+  interval_minutes: number | null;
+  next_sync_at: string | null;
+  has_secret: boolean;
+  last_run_status: string | null;
+}
+
+export interface SyncRunView {
+  id: number;
+  data_source_id: number;
+  status: string;
+  triggered_by: string;
+  started_at: string | null;
+  finished_at: string | null;
+  stats: Record<string, number | string> | null;
+  error: string | null;
+}
+
+export interface ConnectorInput {
+  config: Record<string, string>;
+  secret?: string;
+  sync_interval_minutes?: number | null;
 }
 
 export interface Account {
@@ -327,6 +353,20 @@ export const api = {
         { method: "POST", body: fd },
       );
     },
+    configureConnector: (sourceId: number, input: ConnectorInput) =>
+      request<{ ok: boolean; validated: boolean }>(`/api/sources/${sourceId}/connector`, {
+        method: "PUT",
+        body: JSON.stringify(input),
+      }),
+    syncNow: (sourceId: number) =>
+      request<{ run_id: number }>(`/api/sources/${sourceId}/sync`, { method: "POST" }),
+    syncs: (sourceId: number, params?: { page?: number; page_size?: number }) =>
+      request<Paged<SyncRunView>>(`/api/sources/${sourceId}/syncs?${toQuery(params ?? {})}`),
+  },
+  syncs: {
+    get: (runId: number) => request<SyncRunView>(`/api/syncs/${runId}`),
+    cancel: (runId: number) =>
+      request<{ ok: boolean; status: string }>(`/api/syncs/${runId}/cancel`, { method: "POST" }),
   },
   entitlements: {
     list: (params: { q?: string; privilege?: string; source_id?: number; page?: number; page_size?: number }) =>

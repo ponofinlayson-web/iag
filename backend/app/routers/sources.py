@@ -1,16 +1,22 @@
 """Data source and account router."""
 from __future__ import annotations
+import asyncio
 import csv
 import io
+import json
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from app.core.audit_service import append_audit
+from app.core.connectors import get_adapter
+from app.core.settings import Settings
+from app.core.sync_worker import enqueue_manual
 from app.models.entitlement import Entitlement
 from app.models.identity import Identity, utcnow
 from app.models.source import Account, DataSource, SourceType
-from app.routers.deps import AnyUser, CertAdminUser, DbSession
+from app.models.sync import SyncRun
+from app.routers.deps import AnyUser, CertAdminUser, DbSession, get_settings
 router = APIRouter(prefix="/api/sources", tags=["sources"])
 PRIVILEGE_LEVELS = {"low", "moderate", "high", "very_high"}
 class SourceIn(BaseModel):
@@ -22,9 +28,39 @@ class LinkIn(BaseModel):
     identity_id: int
 class BulkLinkIn(BaseModel):
     match_on: str = Field(pattern="^(username|email)$")
+class ConnectorIn(BaseModel):
+    config: dict
+    secret: str = ""
+    sync_interval_minutes: int | None = Field(default=None, ge=1, le=525600)
+
+
+def _connector_block(s: DataSource, last_run_status: str | None) -> dict:
+    return {
+        "configured": bool(s.connector_config),
+        "interval_minutes": s.sync_interval_minutes,
+        "next_sync_at": s.next_sync_at.isoformat() if s.next_sync_at else None,
+        "has_secret": bool(s.connector_secret),
+        "last_run_status": last_run_status,
+    }
+
+
+async def _latest_run_status(db, source_id: int) -> str | None:
+    row = (
+        await db.execute(
+            select(SyncRun.status).where(SyncRun.data_source_id == source_id)
+            .order_by(SyncRun.id.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    return row
 @router.get("")
 async def list_sources(db: DbSession, user: AnyUser):
     rows = (await db.execute(select(DataSource).order_by(DataSource.id))).scalars().all()
+    # latest run status per source, dialect-portable (DISTINCT ON is PG-only)
+    last_status: dict[int, str] = {}
+    for sid, status in (await db.execute(
+        select(SyncRun.data_source_id, SyncRun.status).order_by(SyncRun.id)
+    )).all():
+        last_status[sid] = status
     out = []
     for s in rows:
         account_count = (
@@ -45,6 +81,7 @@ async def list_sources(db: DbSession, user: AnyUser):
             "is_active": s.is_active,
             "account_count": account_count,
             "unlinked_count": unlinked,
+            "connector": _connector_block(s, last_status.get(s.id)),
         })
     return {"items": out}
 @router.post("")
@@ -79,7 +116,8 @@ async def get_source(source_id: int, db: DbSession, user: AnyUser):
         raise HTTPException(404, "Source not found")
     return {"id": s.id, "name": s.name,
             "source_type": s.source_type.value if s.source_type else None,
-            "description": s.description, "is_active": s.is_active}
+            "description": s.description, "is_active": s.is_active,
+            "connector": _connector_block(s, await _latest_run_status(db, source_id))}
 @router.delete("/{source_id}")
 async def delete_source(source_id: int, db: DbSession, user: CertAdminUser):
     s = await db.get(DataSource, source_id)
@@ -244,3 +282,104 @@ async def upload_csv(source_id: int, file: UploadFile, db: DbSession, user: Cert
                        details={"accounts_created": created_acc, "entitlements_created": created_ent})
     await db.commit()
     return {"accounts_created": created_acc, "entitlements_created": created_ent}
+
+
+@router.put("/{source_id}/connector")
+async def put_connector(
+    source_id: int, body: ConnectorIn, db: DbSession, user: CertAdminUser,
+    settings: Settings = Depends(get_settings),
+):
+    """Set connector config + secret + interval. Adapter validate() runs
+    synchronously (timeout-bounded) BEFORE saving — misconfig dies here,
+    not at 03:00 in the worker (validate_smtp philosophy)."""
+    s = await db.get(DataSource, source_id)
+    if s is None:
+        raise HTTPException(404, "Source not found")
+    if s.source_type not in (SourceType.LDAP, SourceType.ENTRA, SourceType.SQL):
+        raise HTTPException(400, f"Source type {s.source_type.value} does not support connectors")
+    try:
+        adapter = get_adapter(s.source_type.value)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    secret = body.secret or s.connector_secret or ""
+    try:
+        await asyncio.wait_for(
+            asyncio.to_thread(adapter.validate, body.config, secret),
+            timeout=settings.connector_timeout_seconds,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            400, f"connector validation timed out ({settings.connector_timeout_seconds}s)"
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except Exception as exc:  # noqa: BLE001 - any wire error is a 400 here
+        raise HTTPException(400, f"connector validation failed: {exc}")
+    old_interval = s.sync_interval_minutes
+    s.connector_config = json.dumps(body.config)
+    if body.secret:
+        s.connector_secret = body.secret
+    s.sync_interval_minutes = body.sync_interval_minutes
+    if body.sync_interval_minutes:
+        s.next_sync_at = utcnow()
+    elif old_interval and not body.sync_interval_minutes:
+        s.next_sync_at = None
+    await append_audit(db, actor_id=user.id, actor_username=user.identity.username or "",
+                       action="source_connector_configured", entity_type="data_source",
+                       entity_id=source_id,
+                       details={"type": s.source_type.value,
+                                "interval_minutes": body.sync_interval_minutes,
+                                "secret_changed": bool(body.secret)})
+    await db.commit()
+    return {"ok": True, "validated": True}
+
+
+@router.post("/{source_id}/sync")
+async def trigger_sync(source_id: int, db: DbSession, user: CertAdminUser):
+    """Enqueue a manual run now. 409 if one is already in-flight; 400 if
+    the source type has no adapter or is not configured."""
+    s = await db.get(DataSource, source_id)
+    if s is None:
+        raise HTTPException(404, "Source not found")
+    try:
+        get_adapter(s.source_type.value)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    if not s.connector_config:
+        raise HTTPException(400, "Source has no connector config; set it first")
+    run = await enqueue_manual(db, source_id)
+    if run is None:
+        raise HTTPException(409, "A sync run is already in-flight for this source")
+    return {"run_id": run.id}
+
+
+@router.get("/{source_id}/syncs")
+async def list_syncs(source_id: int, db: DbSession, user: AnyUser,
+                     page: int = 1, page_size: int = 20):
+    s = await db.get(DataSource, source_id)
+    if s is None:
+        raise HTTPException(404, "Source not found")
+    total = (await db.execute(
+        select(func.count()).select_from(SyncRun)
+        .where(SyncRun.data_source_id == source_id)
+    )).scalar_one()
+    rows = (await db.execute(
+        select(SyncRun).where(SyncRun.data_source_id == source_id)
+        .order_by(SyncRun.id.desc())
+        .offset((page - 1) * page_size).limit(page_size)
+    )).scalars().all()
+    return {"total": total, "page": page, "items": [_run_out(r) for r in rows]}
+
+
+def _run_out(r: SyncRun) -> dict:
+    import json as _json
+    return {
+        "id": r.id,
+        "data_source_id": r.data_source_id,
+        "status": r.status,
+        "triggered_by": r.triggered_by,
+        "started_at": r.started_at.isoformat() if r.started_at else None,
+        "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+        "stats": _json.loads(r.stats) if r.stats else None,
+        "error": r.error,
+    }

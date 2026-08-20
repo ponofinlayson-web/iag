@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.settings import Settings
-from app.routers import audit, auth, campaigns, dashboard, entitlements, identities, reminders, reviews, sod, sources
+from app.routers import audit, auth, campaigns, dashboard, entitlements, identities, reminders, reviews, sod, sources, syncs
 settings = Settings()
 settings.validate_secrets()
 settings.validate_smtp()
@@ -57,6 +57,7 @@ if settings.cors_origins:
 app.include_router(auth.router)
 app.include_router(identities.router)
 app.include_router(sources.router)
+app.include_router(syncs.router)
 app.include_router(entitlements.router)
 app.include_router(campaigns.router)
 app.include_router(reviews.router)

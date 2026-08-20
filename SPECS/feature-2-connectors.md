@@ -1,6 +1,7 @@
 # Feature 2 — Live LDAP / Entra / SQL connectors
 
-Status: DRAFT — awaiting user ratification. Nothing below is built yet.
+Status: RATIFIED 2026-08-20 (D2 deferred to polish phase; see Secrets).
+Build phases A-E may proceed. Nothing below is built yet.
 Fills the reserved ARCHITECTURE.md slot: "Live LDAP/Entra/SQL connectors:
 background sync tasks inside app replicas."
 
@@ -39,7 +40,7 @@ transaction.
 New table `sync_runs`:
 
 - `id`, `data_source_id` FK CASCADE, `status` (`pending|syncing|done|failed|cancelled`),
-  `trigger` (`manual|schedule`), `started_at`, `finished_at`, `stats` Text(JSON),
+  `triggered_by` (`manual|schedule`; renamed from `trigger` - SQL reserved word), `started_at`, `finished_at`, `stats` Text(JSON),
   `error` Text, `created_at`.
 - Partial unique index `uq_sync_run_inflight ON sync_runs(data_source_id)
   WHERE status IN ('pending','syncing')` — makes duplicate enqueue impossible
@@ -48,14 +49,31 @@ New table `sync_runs`:
 
 ## Secrets
 
+**USER DECISION 2026-08-20: encryption-at-rest (original D2) is DEFERRED
+to the polish phase.** Connector secrets are stored as ordinary DB rows
+for now, exactly like SMTP credentials already live in `.env` today:
+same trust boundary (anyone with the DB or a dump of it can read them),
+zero new security surface, one less encryption layer to get wrong while
+the feature is still forming. When D2 lands (polish), it becomes:
+
 - Encrypted at rest with `cryptography.fernet.MultiFernet` keyed off
   `IAG_SECRET_KEY` (HKDF-SHA256, fixed info string, cached).
-- Write path: one endpoint sets config+secret together; secret never read
-  back — API returns `has_secret: true/false`.
-- Rotating `IAG_SECRET_KEY` orphans stored secrets (decrypt fails -> run
-  fails with a clear error, admin re-enters secret). Documented, accepted.
-- SQL connector passwords live in `connector_secret`, never in the URL.
+- A small migration backfills: add `connector_secret_enc` Text nullable,
+  decrypt-with-old / encrypt-with-new copy job, drop the plain column.
+  The plain column keeps the same name so adapters are untouched.
+- Key-rotation orphans secrets (decrypt fails -> run fails with a clear
+  error, admin re-enters). Documented, accepted then as now.
 
+Until then (v1 of this feature):
+
+- Secret stored plaintext in `data_sources.connector_secret` - same
+  exposure as `.env` SMTP creds, local stack only.
+- Write path: one endpoint sets config+secret together; secret never read
+  back - API returns `has_secret: true/false` (this boundary survives the
+  future encryption migration unchanged).
+- SQL connector passwords live in `connector_secret`, never in the URL.
+- A WARNING comment ships in the model so nobody mistakes this for a
+  finished state.
 ## Worker — fork-A mapping (email worker -> sync worker)
 
 The unit of work differs: email claims one ROW of many; sync claims one JOB
@@ -189,10 +207,12 @@ E. Live proofs (SQL self-ref, LDAP glauth) + HANDOFF update
 
 ## Open decisions for ratification
 
-- **D1 deps**: add `ldap3`, `httpx`, `cryptography` (all mainstream,
+- **D1 deps**: add `ldap3`, `httpx` (`cryptography` dropped - it was
+  only needed for the now-deferred D2; all mainstream,
   permissive licenses; `cryptography` may pull Rust wheels — it ships
   prebuilt for win/linux).
-- **D2 secrets-in-DB**: Fernet under `IAG_SECRET_KEY` as described;
+- **D2 secrets-in-DB**: ~~Fernet under `IAG_SECRET_KEY`~~ DEFERRED to
+  polish by user decision 2026-08-20 (see Secrets above);
   key-rotation orphans secrets (accepted, documented).
 - **D3 no deletes**: upsert-only, missing counted (delete/stale-flag is a
   future decision with its own spec).

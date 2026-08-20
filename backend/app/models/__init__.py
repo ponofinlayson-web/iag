@@ -6,5 +6,6 @@ from app.models.campaign import Campaign, Review
 from app.models.audit import AuditEntry
 from app.models.sod import SodRule
 from app.models.email import EmailOutbox
+from app.models.sync import SyncRun
 
-__all__ = ["Identity", "User", "DataSource", "Account", "Entitlement", "Campaign", "Review", "AuditEntry", "SodRule", "EmailOutbox"]
+__all__ = ["Identity", "User", "DataSource", "Account", "Entitlement", "Campaign", "Review", "AuditEntry", "SodRule", "EmailOutbox", "SyncRun"]

@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     smtp_user: str = Field(default="", alias="IAG_SMTP_USER")
     smtp_password: str = Field(default="", alias="IAG_SMTP_PASSWORD")
     smtp_from: str = Field(default="", alias="IAG_SMTP_FROM")
+    connector_poll_seconds: int = Field(default=60, alias="IAG_CONNECTOR_POLL_SECONDS")
+    connector_stuck_minutes: int = Field(default=15, alias="IAG_CONNECTOR_STUCK_MINUTES")
+    connector_timeout_seconds: int = Field(default=30, alias="IAG_CONNECTOR_TIMEOUT_SECONDS")
+    connector_max_rows: int = Field(default=50000, alias="IAG_CONNECTOR_MAX_ROWS")
     def db_url_sync(self) -> str:
         """Sync driver URL for Alembic and tests."""
         if self.database_url.startswith("sqlite+aiosqlite"):

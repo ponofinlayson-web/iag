@@ -95,7 +95,38 @@ Design specs required before features 3-6 (no reserved slots).
 ## Session log (newest first)
 
 
-### 2026-08-18 (session 2 — reset proof + feature 2 spec)
+### 2026-08-20 (session 3 — D2 deferred, Phase A built)
+
+- **USER DECISION: D2 deferred to polish.** Secrets stored plaintext in
+  DB (same trust boundary as .env SMTP creds), no `cryptography` dep now.
+  Spec Secrets section + model WARNING comment document this + the polish
+  backfill path. D1 deps therefore `ldap3` + `httpx` only. D1/D3/D4/D5/D6
+  ratified as written.
+- **Phase A SHIPPED** (migration 0004 + models + settings):
+  - `backend/app/models/sync.py` — SyncRun model, partial unique index
+    `uq_sync_run_inflight` (one in-flight run per source; `sa.text()`
+    predicate — plain strings are NOT coerced by SQLAlchemy 2.x, that
+    cost 13 test errors before the fix).
+  - `source.py` — 5 connector columns (config, secret[plaintext, D2
+    deferred], interval, next_sync_at, last_sync_at).
+  - `settings.py` — IAG_CONNECTOR_{POLL_SECONDS=60, STUCK_MINUTES=15,
+    TIMEOUT_SECONDS=30, MAX_ROWS=50000}; defaults sane so no compose change.
+  - `0004_connectors.py` — guarded add_column (inspector check) +
+    sync_runs + both indexes. 
+- **Fresh-volume regression found & fixed**: 0001 builds tables from
+  CURRENT metadata (create_all), so it now emits the connector columns;
+  0004's blind add_column then died with duplicate-column on any fresh
+  volume. Fix: inspector-guard in 0004. Proven BOTH paths: live stack
+  upgrade (existing volume) [V] + scratch fresh-volume (SQLite sim AND
+  throwaway postgres:16-alpine on :55432) [V]. Downgrade 0004→0003 clean.
+  Proof scripts committed as reusable tooling:
+  `backend/scripts/_check_0004_fresh.py` (SQLite) + `_check_0004_pg.py`
+  (real PG, self-contained docker run/rm).
+- pytest 27/27; stack rebuilt healthy at 0004; corruption guard earned
+  its keep 4x this session (2 file_editor writes, 1 old_str, 1 scratch
+  script) — all caught at write time, none reached a commit.
+
+### 2026-08-20 (session 2 — reset proof + feature 2 spec)
 
 - Verified session-start state matched handoff exactly [V]: master @
   3ce5afd clean, 0 SMTP lines in .env, 5/5 containers healthy.
@@ -425,3 +456,13 @@ text reminder per pending review, one time, v1.
    (4) → risk/PDF/SIEM (5) → SCIM-class (6). Design spec required before
    each of 3–6; feature 2 has a reserved architecture slot and can proceed
    to spec directly.
+
+## USER DECISIONS RATIFIED (2026-08-20, this session)
+
+3. **D1–D6 of the feature-2 spec (D2 deferred):** user ratified all six
+   decisions as drafted, EXCEPT D2 (secrets-in-DB encryption) is deferred
+   to the polish phase — connector secrets stored as ordinary rows, no
+   `cryptography` dep now, no new security surface. Spec section
+   "Secrets" documents the deferral and the migration-0005 (or later)
+   backfill path. D1 new-deps list is therefore `ldap3` + `httpx` only.
+   Build phases A–E may proceed.

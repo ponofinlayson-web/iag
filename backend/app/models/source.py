@@ -28,6 +28,14 @@ class DataSource(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    # --- Feature 2: live connector config (migration 0004) ---
+    connector_config: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON blob
+    # WARNING: plaintext by USER DECISION 2026-08-20 (D2 deferred to polish).
+    # Same trust boundary as .env SMTP creds; see SPECS/feature-2-connectors.md.
+    connector_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sync_interval_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    next_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     accounts = relationship("Account", back_populates="data_source", cascade="all, delete-orphan")
     entitlements = relationship("Entitlement", back_populates="data_source")
 class Account(Base):

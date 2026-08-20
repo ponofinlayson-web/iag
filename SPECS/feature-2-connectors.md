@@ -197,6 +197,25 @@ run fails fast with a clear error.
    a documented manual checklist for first production use. Stated plainly,
    not papered over.
 
+   Manual checklist (first production tenant):
+   1. Register an Entra ID app registration (single-tenant), create a
+      client secret. Note tenant_id, client_id, secret value.
+   2. Grant the app **application permissions** (not delegated):
+      `User.Read.All` + `GroupMember.Read.All` (transitiveMemberOf needs
+      it) + `Group.Read.All`; grant admin consent in the portal.
+   3. In IAG create an `entra` source, PUT connector with tenant_id +
+      client_id + secret. Save-time validate fetches a token — a 400
+      here means bad IDs/secret or no consent, fix before syncing.
+   4. `POST /sync` with a small tenant first; inspect run stats and spot
+      check: account_value = userPrincipalName, entitlements = group
+      displayNames (transitive: nested groups included).
+   5. Paging follows @odata.nextLink (verified in adapter code +
+      MockTransport tests). NOTE: no 429 back-off logic yet — on a big
+      tenant a throttled run fails and shows in run history; retry the
+      sync manually. If throttling bites in practice, add
+      Retry-After-aware back-off to the entra adapter (small change,
+      worker already handles failed runs).
+
 ## Build phases (each ends green: pytest + stack healthy)
 
 A. Migration 0004 + models + settings + secrets module

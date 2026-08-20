@@ -63,7 +63,9 @@ def _first_value(attrs: dict, *names: str) -> str | None:
 
 LDAP_PAGE_SIZE = 500
 _PAGED_OID = "1.2.840.113556.1.4.319"  # simple paged results control
-_CN_RE = re.compile(r"^\s*cn=([^,]+)", re.IGNORECASE)
+# AD groups are cn=...; some directories (glauth, some OpenLDAP layouts)
+# nest groups as ou=... — take the first RDN's value either way.
+_CN_RE = re.compile(r"^\s*(?:cn|ou)=([^,]+)", re.IGNORECASE)
 
 
 def _ldap_connect(config: dict, secret: str, timeout: float):
@@ -71,12 +73,15 @@ def _ldap_connect(config: dict, secret: str, timeout: float):
 
     server = Server(config["url"], connect_timeout=timeout)
     # auto_bind=True raises on bad credentials at connect time.
+    # receive_timeout MUST be an int: a float reaches pyasn1's ber decoder
+    # as a non-integer socket timeout arg and fails with the cryptic
+    # "error: required argument is not an integer".
     return Connection(
         server,
         user=config.get("bind_dn") or None,
         password=secret,
         auto_bind=True,
-        receive_timeout=timeout,
+        receive_timeout=int(timeout),
         read_only=True,
     )
 

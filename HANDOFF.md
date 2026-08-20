@@ -88,14 +88,62 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Nothing broken. Feature 2 in build: Phase A (models+migration 0004+
-settings, commit d07d706) and Phase B (sync worker, commit cfbb92b,
-pytest 37/37) DONE. Next: Phase C adapters (CSV directory + stub),
-Phase D API endpoints (CRUD + manual sync trigger + sync-runs list),
-Phase E live proof + HANDOFF. Arc: 2/6 after Feature 2 lands.
-Design specs required before features 3-6 (no reserved slots).
+Nothing pending. Feature 2 (live connectors) COMPLETE through Phase E:
+- Phase A (models+migration 0004+settings, d07d706), Phase B (sync
+  worker, cfbb92b), Phase C (adapters, 2fdeab2), Phase D (API +
+  frontend, 3537151 + E2 follow-up), all pytest green (64/64).
+- Live proofs: SQL self-referencing PASS, LDAP glauth PASS (compose
+  profile `connectors`). Entra not live-provable without a tenant —
+  see "Entra manual checklist" below.
+Arc: 2/6 landed. Design specs + ratification required before feature 3
+(remediation) and features 4-6.
 
 ## Session log (newest first)
+
+### 2026-08-20 (session 5): FEATURE 2 COMPLETE (Phases C+D+E)
+
+**Arc milestone: connectors shipped.** All spec phases green, 64/64
+backend tests, TSC clean, stack healthy.
+
+- **Phase C** (2fdeab2): `app/core/connectors.py` — registry
+  (`get_adapter`) + LdapAdapter/EntraAdapter/SqlAdapter. ldap3 sync via
+  to_thread; entra = httpx client-credentials with in-process token
+  cache, paginated /users + transitiveMemberOf (ConsistencyLevel:
+  eventual); sql = admin SELECT on throwaway engine, READ ONLY on
+  Postgres, `$SECRET` URL placeholder. 16 new tests (ldap3 MOCK
+  strategy, httpx MockTransport, real SQLite file through real engine).
+- **Phase D** (3537151): API `PUT /api/sources/{id}/connector`
+  (adapter validate() runs at save; empty secret keeps stored; interval
+  drives next_sync_at; csv/xlsx 400), `POST .../sync` (409 in-flight),
+  `GET .../syncs`, `GET /api/syncs/{id}`, `POST /api/syncs/{id}/cancel`
+  (finished → 409). Source GET gains connector block. Frontend Sources
+  view: config form per type, Sync now, status chip, run-history
+  drawer. 11 new tests.
+- **Phase E live proofs** (this session, both PASS):
+  1. SQL self-referencing: `scripts/live_connector_check.py` — planted
+     table in stack's own Postgres, connector as iag_app user, manual
+     sync → worker pass → accounts+entitlements+valid chain.
+  2. LDAP glauth: `scripts/live_ldap_check.py` — compose profile
+     `connectors` (iag-glauth, deploy/glauth.cfg), svc-iag bind, manual
+     sync → 3 accounts, 4 entitlements, chain valid.
+- **Bugs found live** (both fixed, suite green):
+  - ldap3 `receive_timeout` must be int — float reaches pyasn1's BER
+    decoder as non-integer socket arg ("error: required argument is not
+    an integer"). Fixed: `receive_timeout=int(timeout)`.
+  - glauth groups nest as `ou=<name>,ou=groups,...` (not cn=) and users
+    are `posixAccount` (not person). Adapter DN regex now accepts
+    cn|ou first RDN; proof uses filter `(objectClass=posixAccount)`,
+    account_attr `uid`. Real AD is unaffected (cn= + person).
+- **Entra**: MockTransport-tested only; no local tenant. Manual
+  checklist for first production use lives in
+  `SPECS/feature-2-connectors.md` (live-proofs section).
+
+Session gotchas (new): compose `build` must target `iag-app-1` (the
+anchor service); after rebuild, `--force-recreate iag-app-2 iag-app-3`
+too or nginx load-balances stale code into your proof. API DELETE
+/api/sources/{id} has no cascade — live proofs clean up via psql
+(DELETE FROM accounts/sync_runs/entitlements WHERE data_source_id ...)
+then the source row.
 
 ### 2026-08-20 (session 4): Feature 2 Phase B shipped
 

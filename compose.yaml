@@ -105,6 +105,17 @@ services:
     restart: unless-stopped
     logging: *logopts
 
+  iag-glauth:
+    # optional LDAP directory for live connector proofs — compose profile
+    # "connectors"; never started by the default stack.
+    image: glauth/glauth:latest
+    container_name: iag-glauth
+    profiles: ["connectors"]
+    volumes:
+      - ./deploy/glauth.cfg:/app/config/config.cfg:ro
+    restart: unless-stopped
+    logging: *logopts
+
 volumes:
   iag_pgdata:
   iag_static:

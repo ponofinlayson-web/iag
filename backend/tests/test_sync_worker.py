@@ -40,27 +40,6 @@ def _snapshot(*specs) -> SyncSnapshot:
     return SyncSnapshot(accounts=accounts)
 
 
-@pytest.fixture()
-def worker_session(client):
-    """Fresh engine per call (run_pass driven under asyncio.run; pooled
-    connections must never cross loops). Same per-test DB as TestClient."""
-    from contextlib import asynccontextmanager
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-    @asynccontextmanager
-    async def _factory():
-        engine = create_async_engine(
-            f"sqlite+aiosqlite:///{client.app.state.test_db_path}")
-        maker = async_sessionmaker(engine, class_=AsyncSession,
-                                   expire_on_commit=False, autoflush=False)
-        try:
-            yield maker
-        finally:
-            await engine.dispose()
-
-    return _factory
-
-
 SETTINGS = Settings(connector_poll_seconds=1, connector_stuck_minutes=15,
                     connector_max_rows=50000, env="test")
 

@@ -55,3 +55,23 @@ def admin_client(client):
     })
     assert r.status_code == 200, r.text
     return client
+@pytest.fixture()
+def worker_session(client):
+    """Fresh async engine factory per call (run_pass driven under
+    asyncio.run; pooled connections must never cross loops). Same
+    per-test DB as TestClient."""
+    from contextlib import asynccontextmanager
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    @asynccontextmanager
+    async def _factory():
+        engine = create_async_engine(
+            f"sqlite+aiosqlite:///{client.app.state.test_db_path}")
+        maker = async_sessionmaker(engine, class_=AsyncSession,
+                                   expire_on_commit=False, autoflush=False)
+        try:
+            yield maker
+        finally:
+            await engine.dispose()
+
+    return _factory

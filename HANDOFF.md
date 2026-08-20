@@ -88,11 +88,49 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Nothing broken. Arc: 1/6 shipped, feature 2 spec DRAFTED awaiting
-ratification. Fresh-volume reset proof DONE (2026-08-18, this session).
+Nothing broken. Feature 2 in build: Phase A (models+migration 0004+
+settings, commit d07d706) and Phase B (sync worker, commit cfbb92b,
+pytest 37/37) DONE. Next: Phase C adapters (CSV directory + stub),
+Phase D API endpoints (CRUD + manual sync trigger + sync-runs list),
+Phase E live proof + HANDOFF. Arc: 2/6 after Feature 2 lands.
 Design specs required before features 3-6 (no reserved slots).
 
 ## Session log (newest first)
+
+### 2026-08-20 (session 4): Feature 2 Phase B shipped
+
+- pytest **37/37** (10 new worker tests). Commit `cfbb92b`.
+- `app/core/sync_worker.py` NEW — fork-A pattern adapted for connectors:
+  `run_pass` = enqueue due sources (next_sync_at <= now, honoring per-source
+  sync_interval_minutes) → claim ONE run (FOR UPDATE SKIP LOCKED + stuck
+  reclaim: `syncing` older than connector_stuck_minutes) → fetch snapshot
+  OUTSIDE any transaction → finalize (apply + ONE audit entry + schedule
+  advance) in a single commit. Cancelled runs never resurrected (fresh-status
+  check before finalize → skipped_cancelled).
+- Apply semantics = CSV upload ground truth: natural-key entitlement upsert;
+  per-(source,value) account upsert; last_seen bumps; missing counted not
+  deleted; identity auto-link by exact username/email match; existing
+  entitlement links never rewritten (Account.entitlement_id untouched —
+  single-valued CSV shape vs multi-ent connector accounts; catalog is truth).
+- Worker loop wired in lifespan alongside email worker (env != test only).
+  Live proof: rebuilt stack, 3 replicas healthy, log line
+  `"connector worker start (poll=60s)"` in app-1, zero tracebacks [V].
+- **Footguns found (all test-side, worker code was correct):**
+  1. `Settings(field=value)` kwargs are SILENTLY IGNORED — alias-only
+     pydantic-settings mode (`populate_by_name` not set). Test variants
+     must be built via env vars: `IAG_CONNECTOR_MAX_ROWS=1` + `Settings()`.
+  2. After a rollback (duplicate-enqueue IntegrityError), SQLAlchemy
+     expires the first instance — `r1.id` after rollback triggers greenlet
+     error. Capture ids BEFORE the conflicting call.
+  3. `await fetch()` where fetch is a plain lambda returning a snapshot →
+     TypeError that the worker correctly fails the run on. Adapter contract:
+     `async def fetch(config, secret) -> SyncSnapshot`.
+  4. `asyncio.run()` nesting: all test bodies use the test_reminders
+     pattern (fresh-engine factory per asyncio.run call).
+- Scratch probe scripts cleaned up; `scripts/_check_0004_fresh.py` +
+  `_check_0004_pg.py` REMOVED from repo (one-shot migration checks,
+  superseded by live verification on the real stack).
+
 
 
 ### 2026-08-20 (session 3 — D2 deferred, Phase A built)

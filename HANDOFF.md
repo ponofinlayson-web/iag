@@ -88,12 +88,36 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Nothing broken. Deferred-features arc ratified and in progress (1/6 shipped).
-Pending decisions: fresh-volume reset proof before feature 2's migration;
-design specs required before features 3-6 (no reserved slots).
+Nothing broken. Arc: 1/6 shipped, feature 2 spec DRAFTED awaiting
+ratification. Fresh-volume reset proof DONE (2026-08-18, this session).
+Design specs required before features 3-6 (no reserved slots).
 
 ## Session log (newest first)
 
+
+### 2026-08-18 (session 2 — reset proof + feature 2 spec)
+
+- Verified session-start state matched handoff exactly [V]: master @
+  3ce5afd clean, 0 SMTP lines in .env, 5/5 containers healthy.
+- **Fresh-volume reset proof PASSED first try** (pre-ratified): `down -v`
+  removed both volumes (iag_pgdata, iag_static) -> `up -d --build` -> all
+  healthy. psql proof via `docker compose exec -T iag-db psql -U iag_migrate
+  -d iag`: alembic_version=0003, email_outbox present (14 cols), bootstrap
+  admin `admin@iag.local` SYSTEM_ADMIN active. Front door :8090 serving
+  SPA 200. Service name is `iag-db` not `db`; DB role `iag_migrate`, DB
+  `iag` [V].
+- **Feature 2 spec DRAFTED**: `SPECS/feature-2-connectors.md` (202 lines,
+  16 sections). Live LDAP/Entra/SQL connectors per reserved architecture
+  slot: migration 0004 (connector config/secret/interval columns +
+  sync_runs table with partial unique in-flight index), fork-A worker
+  (enqueue/claim/work-outside-TX/finalize), Fernet secrets under
+  IAG_SECRET_KEY, three adapters, API, frontend surface, tests, live
+  proofs (SQL self-ref + glauth LDAP profile; Entra = MockTransport only,
+  stated plainly). SIX open decisions D1-D6 awaiting user ratification.
+- Corruption guard honored: first file_editor write of the spec came out
+  garbled (duplicate sections, junk tokens) — caught by spot-check,
+  deleted, rewritten clean, verified (0 corruption tokens, headers sane).
+  Same guard applies to every write this session.
 
 ### 2026-08-18 (deferred-arc session 1 - FEATURE 1 SHIPPED)
 

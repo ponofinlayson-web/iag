@@ -88,17 +88,47 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Nothing pending. Feature 2 (live connectors) COMPLETE through Phase E:
+Nothing pending in code. Feature 3 (remediation) spec is DRAFTED and
+COMMITTED (67aa079, `SPECS/feature-3-remediation.md`) — awaiting USER
+ratification of decisions D1–D7. NO feature-3 code before that.
+Feature 2 (live connectors) COMPLETE through Phase E:
 - Phase A (models+migration 0004+settings, d07d706), Phase B (sync
   worker, cfbb92b), Phase C (adapters, 2fdeab2), Phase D (API +
   frontend, 3537151 + E2 follow-up), all pytest green (64/64).
 - Live proofs: SQL self-referencing PASS, LDAP glauth PASS (compose
   profile `connectors`). Entra not live-provable without a tenant —
   see "Entra manual checklist" below.
-Arc: 2/6 landed. Design specs + ratification required before feature 3
-(remediation) and features 4-6.
+Arc: 2/6 landed; 3 (remediation) in spec-ratification. Design specs +
+ratification required before each of features 4-6 as well.
 
 ## Session log (newest first)
+
+### 2026-08-20 (session 6): FEATURE 3 SPEC DRAFTED (no code)
+
+- Commit 67aa079: `SPECS/feature-3-remediation.md` (319 lines,
+  verified clean — no dup lines, no CRLF, no drafting artifacts).
+  pytest 64/64 at draft time; tree clean except HANDOFF/memory edits.
+- Scope mined from v1 `remediation_service.py` + tier5_models/tier5_api
+  (read-only reference, no code copied): rules → matched actions →
+  approval gate → execute. v1 actions: notify_owner, disable_account,
+  remove_entitlement, webhook.
+- **Core divergence (D1, needs ratification)**: v2 drops
+  disable_account (mutating IAG's own auth/users because governance
+  said so) and remove_entitlement (deleting mirror rows the next sync
+  resurrects — violates feature-2 upsert-only/D3). Remediation =
+  workflow layer (rules, approval, notify_owner email, webhook);
+  enforcement write-back = feature 6 with its own spec.
+- Design: trigger inside `_finalize` TX (single+bulk both flow
+  through); pure matching engine `app/core/remediation_engine.py`
+  (sod_engine shape); fork-A worker (SKIP LOCKED claim → deliver
+  outside TX → finalize); action row IS the delivery record (no
+  EmailOutbox reuse — constraint + semantic mismatch, D2); single-row
+  `remediation_settings` table (D4); regex compiled at rule SAVE
+  (fail-fast house style, D6).
+- **AWAITING USER**: ratify/amend D1–D7 at end of spec. NO feature-3
+  code before ratification. After ratification: phases A–E mirroring
+  feature-2 cadence (models → trigger+engine → worker → API+frontend →
+  live proofs), each ending pytest-green + stack healthy + commit.
 
 ### 2026-08-20 (session 5): FEATURE 2 COMPLETE (Phases C+D+E)
 

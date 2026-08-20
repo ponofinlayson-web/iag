@@ -24,21 +24,25 @@ logger = logging.getLogger("iag")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start the in-replica reminder worker (resilience contract 4: the app
-    is the only writer; no cron, no sidecar schedulers). Skipped under test:
+    """Start the in-replica workers (resilience contract 4: the app is the
+    only writer; no cron, no sidecar schedulers). Skipped under test:
     SessionLocal targets the production URL and tests drive run_pass with
     their own factory."""
     if settings.env == "test":
         yield
         return
     from app.core.email_worker import worker_loop
+    from app.core.sync_worker import connector_worker_loop
     task = asyncio.create_task(worker_loop())
+    sync_task = asyncio.create_task(connector_worker_loop())
     yield
     task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    sync_task.cancel()
+    for t in (task, sync_task):
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="IAG", version="0.1.0", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)

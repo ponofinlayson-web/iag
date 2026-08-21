@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from app.core.audit_service import append_audit
+from app.core.remediation_trigger import trigger_remediation
 from app.core.sod_engine import violations_for_identities
 from app.models.campaign import Campaign, CampaignStatus, Review, ReviewStatus
 from app.models.identity import Identity, utcnow
@@ -128,6 +129,10 @@ async def _finalize(db, user, review: Review, decision: str, comments: str | Non
     await append_audit(db, actor_id=user.id, actor_username=user.identity.username or "",
                        action="review_decided", entity_type="review", entity_id=review.id,
                        details={"decision": decision, "campaign_id": review.campaign_id})
+    if decision == "revoke":
+        account = await db.get(Account, review.account_id)
+        if account is not None:
+            await trigger_remediation(db, user, review, account)
 async def _maybe_complete(db, user, campaign: Campaign) -> None:
     """Domain rule 6: a campaign completes when every review has a decision."""
     await db.flush()  # counts must see pending decision UPDATEs (autoflush off)

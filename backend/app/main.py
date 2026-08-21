@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.settings import Settings
-from app.routers import audit, auth, campaigns, dashboard, entitlements, identities, reminders, reviews, sod, sources, syncs
+from app.routers import audit, auth, campaigns, dashboard, entitlements, identities, remediation, reminders, reviews, sod, sources, syncs
 settings = Settings()
 settings.validate_secrets()
 settings.validate_smtp()
@@ -68,6 +68,7 @@ app.include_router(sod.router)
 app.include_router(audit.router)
 app.include_router(dashboard.router)
 app.include_router(reminders.router)
+app.include_router(remediation.router)
 @app.get("/api/health", tags=["system"])
 async def health():
     return {"status": "ok", "service": "iag-api", "version": "0.1.0"}

@@ -197,6 +197,69 @@ export interface AuditEntryView {
   record_hash: string;
 }
 
+export interface RemediationRule {
+  id: number;
+  name: string;
+  description: string | null;
+  data_source_id: number | null;
+  privilege_level: string | null;
+  entitlement_pattern: string | null;
+  action: string;
+  webhook_url: string | null;
+  is_active: boolean;
+  require_approval: boolean;
+  times_triggered: number;
+  times_executed: number;
+  times_failed: number;
+  created_at: string | null;
+}
+
+export interface RemediationRuleInput {
+  name: string;
+  description?: string | null;
+  data_source_id?: number | null;
+  privilege_level?: string | null;
+  entitlement_pattern?: string | null;
+  action?: string;
+  webhook_url?: string | null;
+  is_active?: boolean;
+  require_approval?: boolean;
+}
+
+export interface RemediationAction {
+  id: number;
+  review_id: number;
+  rule_id: number | null;
+  rule_name: string | null;
+  account_id: number;
+  action_type: string;
+  status: string;
+  requires_approval: boolean;
+  approved_by_id: number | null;
+  approved_at: string | null;
+  attempts: number;
+  result: string | null;
+  executed_at: string | null;
+  created_at: string | null;
+  snapshot: {
+    campaign_id?: number;
+    campaign_name?: string;
+    data_source_name?: string;
+    account_value?: string;
+    account_type?: string;
+    privilege_level?: string;
+    entitlement_name?: string;
+    identity_name?: string;
+    [key: string]: unknown;
+  };
+}
+
+export interface RemediationSettings {
+  enabled: boolean;
+  default_action: string;
+  require_approval_for_high_risk: boolean;
+}
+
 export interface OutboxRow {
   id: number;
   campaign_id: number;
@@ -446,6 +509,42 @@ export const api = {
       }),
     deleteRule: (id: number) =>
       request<{ ok: boolean }>(`/api/sod/rules/${id}`, { method: "DELETE" }),
+  },
+  remediation: {
+    rules: () =>
+      request<{ items: RemediationRule[] }>("/api/remediation/rules"),
+    createRule: (input: RemediationRuleInput) =>
+      request<{ id: number; name: string }>("/api/remediation/rules", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    updateRule: (id: number, input: RemediationRuleInput) =>
+      request<{ ok: boolean }>(`/api/remediation/rules/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(input),
+      }),
+    deleteRule: (id: number) =>
+      request<{ ok: boolean }>(`/api/remediation/rules/${id}`, { method: "DELETE" }),
+    actions: (params: { status?: string; campaign_id?: number; rule_id?: number; limit?: number }) =>
+      request<{ items: RemediationAction[]; total: number }>(
+        "/api/remediation/actions?" + toQuery(params),
+      ),
+    act: (id: number, op: "approve" | "cancel") =>
+      request<{ ok: boolean; status: string }>(`/api/remediation/actions/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ op }),
+      }),
+    retry: (id: number) =>
+      request<{ ok: boolean; attempts: number }>(`/api/remediation/actions/${id}/retry`, {
+        method: "POST",
+      }),
+    settings: () =>
+      request<RemediationSettings>("/api/remediation/settings"),
+    updateSettings: (input: RemediationSettings) =>
+      request<RemediationSettings>("/api/remediation/settings", {
+        method: "PUT",
+        body: JSON.stringify(input),
+      }),
   },
 };
 

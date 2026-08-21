@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { to: "/entitlements", label: "Entitlements", roles: ["system_admin", "certification_admin"] },
   { to: "/campaigns", label: "Campaigns", roles: ["system_admin", "certification_admin"] },
   { to: "/sod", label: "SoD Rules", roles: ["system_admin", "certification_admin"] },
+  { to: "/remediation", label: "Remediation", roles: ["system_admin", "certification_admin"] },
   { to: "/outbox", label: "Reminders", roles: ["system_admin", "certification_admin"] },
   { to: "/reviews", label: "Reviews", roles: ["system_admin", "certification_admin", "reviewer"] },
   { to: "/audit", label: "Audit", roles: ["system_admin", "certification_admin", "auditor"] },

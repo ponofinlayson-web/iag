@@ -47,9 +47,14 @@ backend/app/db.py ‚Äî async engine, Base, get_db, SQLite FK pragma
 backend/app/models/*.py ‚Äî identity, user (Role enum), source (DataSource,
   Account, SourceType), entitlement (natural key uq constraint),
   campaign (Campaign/Review + status enums), audit (AuditEntry hash chain)
-backend/app/routers/deps.py ‚Äî get_current_user, require_roles, Annotated
-  aliases: AdminUser, CertAdminUser, AnyUser, DbSession; exports _settings
-backend/app/routers/auth.py ‚Äî login (lockout), me, logout, change-password
+backend/app/routers/deps.py ‚Äî get_current_user (cookie OR Bearer API-key
+  principal), ApiKeyPrincipal, read-only + keys-manage-keys chokes,
+  require_roles, Annotated aliases: AdminUser, CertAdminUser, AnyUser,
+  SessionUser (cookie-only), DbSession; exports _settings
+backend/app/routers/auth.py ‚Äî login (lockout), me/logout/change-password
+  (all SessionUser; logout no longer anonymous)
+backend/app/models/apikey.py ‚Äî ApiKey (name/prefix/hash/role/is_active/
+  expires_at/last_used_at), sa.Enum(Role) name-storage
 backend/app/routers/identities.py ‚Äî list/get/create/update/delete,
   /import CSV upsert, /export CSV, manager-cycle guard (_check_cycle)
 backend/app/routers/sources.py ‚Äî CRUD, /upload CSV (natural-key entitlement
@@ -88,15 +93,53 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Nothing pending in code. Feature 4 (API keys) spec is RATIFIED
-by USER (`All ratified`, 2026-08-20 session 8) - D1-D7 all as
-drafted. NOTHING IS BUILT YET: build starts at Phase A in the next
-session (see Sequence below). Feature 3 (remediation) is COMPLETE
-through Phase E (pytest 108/108, TSC 0, stack healthy, live E2E
-proof PASS, tree clean @ a31f529). Arc: 3/6 landed; feature 4 is
-spec-ratified, code pending. Features 5 (risk/PDF/SIEM) and 6
-(SCIM-class) still need specs + ratification before code.
+Nothing pending in code. Feature 4 (API keys): Phases A + B BUILT
+and committed (session 9): A = b9c499f (model/migration/pure fns,
+117/117), B = 53415f9 (principal wiring + SessionUser sweep,
+130/130 + live Postgres proof + cookie regression). NEXT: Phases
+C + D in a fresh chat (router + frontend, then live proof +
+HANDOFF). Feature 3 complete through E. Arc: 3/6 landed, feature 4
+half-built. Features 5 (risk/PDF/SIEM) and 6 (SCIM-class) still
+need specs + ratification before code.
 ## Session log (newest first)
+
+### 2026-08-21 (session 9): FEATURE 4 PHASES A + B BUILT
+
+- Phase A (b9c499f): migration 0006 + models/apikey.py +
+  core/apikeys.py pure fns (generate/parse/hash/verify/is_expired).
+  Applied on live stack; alembic_version 0006, table verified.
+- Phase B (53415f9): deps.py Bearer resolution -> ApiKeyPrincipal;
+  read-only choke + keys-manage-keys choke at principal layer;
+  SessionUser sweep (auth me/logout/change-password, reviews
+  queue/count/history/submit/bulk-submit); dashboard mixed payload
+  (portfolio real, personal zeroed, principal:api_key);
+  last_used_at 60s throttle.
+- Live proofs (Postgres, real stack): key reads dashboard 200 +
+  audit 200 (auditor role), write choke 403, personal choke 403,
+  last_used_at set + NOT rewritten within 60s; cookie login/me/
+  dashboard unchanged. 3 replicas rebuilt.
+- GOTCHAS learned (matter for C/D):
+  1. sa.Enum(Role) stores enum NAMES (AUDITOR) not values
+     (auditor) - raw psql seeds must use names; Phase C router
+     must convert request strings via Role(value).
+  2. Each app replica has its OWN image (iag-iag-app-1/2/3):
+     docker compose build EVERY service then --force-recreate,
+     or nginx round-robins stale code.
+  3. /api/api-keys currently 404s for keys (router absent);
+     Phase-C test flips its branch to == 403 once the router
+     exists (test written to accept both, keyed off app.routes).
+  4. alembic runs in-container as iag_app (no DDL rights): apply
+     via docker exec -e IAG_DATABASE_URL=...iag_migrate... or the
+     compose migrate service. PG enum TYPE 'role' exists (0001);
+     0006 uses native_enum=False (VARCHAR) to avoid collision.
+  5. logout now requires a session (D4) - anonymous logout is
+     401; test_login_lockout updated accordingly.
+- Phase-C reminders from spec: AdminUser-guarded POST create
+  returns full key ONCE (201); role restricted to auditor +
+  report_viewer (400 otherwise); 409 dup name; past expires_at
+  400; revoke idempotent 200; audit api_key_created/revoked in
+  the same TX; OpenAPI bearer scheme; frontend API Keys view
+  (system_admin nav), client.ts apiKeys namespace; TSC + build.
 
 ### 2026-08-20 (session 8): FEATURE 4 SPEC RATIFIED (no code yet)
 
@@ -643,8 +686,10 @@ for every write (AST-check python, junk-grep, CRLF-normalize).
 ## User's exact words for the new chat
 
 "Continue the IAG rebuild at D:\Projects\iag - read
-HANDOFF.md first. Feature 4 (API keys) is spec-ratified; start the
-build at Phase A and follow the Sequence section."
+HANDOFF.md first. Feature 4 (API keys) Phases A+B are built and
+committed (b9c499f, 53415f9; 130/130, stack rebuilt+proven live).
+Start at Phase C (router + frontend) and follow the Sequence
+section; close with Phase D (live proof + HANDOFF)."
 
 ## USER DECISIONS RATIFIED (2026-08-20, session 8)
 

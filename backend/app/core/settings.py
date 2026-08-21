@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     connector_stuck_minutes: int = Field(default=15, alias="IAG_CONNECTOR_STUCK_MINUTES")
     connector_timeout_seconds: int = Field(default=30, alias="IAG_CONNECTOR_TIMEOUT_SECONDS")
     connector_max_rows: int = Field(default=50000, alias="IAG_CONNECTOR_MAX_ROWS")
+    remediation_poll_seconds: int = Field(default=30, alias="IAG_REMEDIATION_POLL_SECONDS")
+    remediation_stuck_minutes: int = Field(default=15, alias="IAG_REMEDIATION_STUCK_MINUTES")
+    remediation_max_attempts: int = Field(default=3, alias="IAG_REMEDIATION_MAX_ATTEMPTS")
+    remediation_webhook_timeout_seconds: int = Field(
+        default=10, alias="IAG_REMEDIATION_WEBHOOK_TIMEOUT_SECONDS"
+    )
     def db_url_sync(self) -> str:
         """Sync driver URL for Alembic and tests."""
         if self.database_url.startswith("sqlite+aiosqlite"):

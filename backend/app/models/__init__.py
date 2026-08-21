@@ -7,5 +7,14 @@ from app.models.audit import AuditEntry
 from app.models.sod import SodRule
 from app.models.email import EmailOutbox
 from app.models.sync import SyncRun
+from app.models.remediation import (
+    RemediationRule,
+    RemediationAction,
+    RemediationSettings,
+)
 
-__all__ = ["Identity", "User", "DataSource", "Account", "Entitlement", "Campaign", "Review", "AuditEntry", "SodRule", "EmailOutbox", "SyncRun"]
+__all__ = [
+    "Identity", "User", "DataSource", "Account", "Entitlement", "Campaign", "Review",
+    "AuditEntry", "SodRule", "EmailOutbox", "SyncRun",
+    "RemediationRule", "RemediationAction", "RemediationSettings",
+]

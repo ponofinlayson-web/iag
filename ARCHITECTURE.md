@@ -70,4 +70,6 @@ Dockerfile            multi-stage: node build then python runtime
   enforcement write-back is a future, separately-specced feature.
 - External anchoring of the audit chain (weekly digest to a tamper-
   resistant location).
+- API keys: bearer-token machine access, read-only, role-scoped
+  (auditor/report_viewer only).
 - Read replicas: possible later, always read-only.

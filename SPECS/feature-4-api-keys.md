@@ -1,7 +1,7 @@
 # Feature 4 - API keys (machine access, read-only)
 
-Status: DRAFT 2026-08-20, awaiting USER ratification of decisions D1-D7.
-NO feature-4 code before ratification. Fills the REQUIREMENTS.md 4
+Status: RATIFIED 2026-08-20 (D1-D7 all as drafted; "All ratified"). Build phases A-D may proceed. Nothing below is built yet.
+Fills the REQUIREMENTS.md 4
 deferred list ("API keys"). No ARCHITECTURE.md design slot exists yet;
 one line is added at ratification (same pattern as feature 3):
 "API keys: bearer-token machine access, read-only, role-scoped."

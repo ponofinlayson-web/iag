@@ -88,23 +88,37 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Nothing pending in code. Feature 3 (remediation) is COMPLETE through
-Phase E (live proofs PASS) — spec ratified by USER, all phases built,
-pytest 108/108, TSC clean, stack healthy, live E2E proof PASS.
-Arc: 3/6 landed (1 email templates, 2 connectors, 3 remediation).
-Next: feature 4 (API keys) needs a NEW spec + USER ratification BEFORE
-any code — same pattern as feature 3.
-Feature 2 (live connectors) COMPLETE through Phase E:
-- Phase A (models+migration 0004+settings, d07d706), Phase B (sync
-  worker, cfbb92b), Phase C (adapters, 2fdeab2), Phase D (API +
-  frontend, 3537151 + E2 follow-up), all pytest green (64/64).
-- Live proofs: SQL self-referencing PASS, LDAP glauth PASS (compose
-  profile `connectors`). Entra not live-provable without a tenant —
-  see "Entra manual checklist" below.
-Arc: 2/6 landed; 3 (remediation) in spec-ratification. Design specs +
-ratification required before each of features 4-6 as well.
-
+Nothing pending in code. Feature 4 (API keys) spec is RATIFIED
+by USER (`All ratified`, 2026-08-20 session 8) - D1-D7 all as
+drafted. NOTHING IS BUILT YET: build starts at Phase A in the next
+session (see Sequence below). Feature 3 (remediation) is COMPLETE
+through Phase E (pytest 108/108, TSC 0, stack healthy, live E2E
+proof PASS, tree clean @ a31f529). Arc: 3/6 landed; feature 4 is
+spec-ratified, code pending. Features 5 (risk/PDF/SIEM) and 6
+(SCIM-class) still need specs + ratification before code.
 ## Session log (newest first)
+
+### 2026-08-20 (session 8): FEATURE 4 SPEC RATIFIED (no code yet)
+
+- SPECS/feature-4-api-keys.md drafted + committed (a31f529), then
+  USER ratified ALL of D1-D7 as drafted (`All ratified`).
+- Ratification recorded in 3 places: spec header (this edit),
+  ARCHITECTURE.md design-slots line, this HANDOFF (in-flight section
+  + ratified-decisions block below).
+- Spec shape: Bearer keys iag_{id}_{token_urlsafe(32)}, SHA-256 at
+  rest, constant-time compare, once-only reveal, soft revoke, rows
+  permanent. Roles: auditor + report_viewer ONLY (create with other
+  role = 400). READ-ONLY enforced at principal layer (non-GET/HEAD/
+  OPTIONS = 403) + keys cannot manage keys (/api/api-keys = 403).
+  Personal endpoints get SessionUser alias (cookie only); dashboard
+  returns portfolio + zeroed personal block with principal:api_key.
+  Audit: api_key_created/api_key_revoked lifecycle only; last_used_at
+  throttled 60s. No new env vars, no compose change.
+- Build phases: A model+migration 0006+core/apikeys.py pure fns;
+  B deps.py principal wiring + SessionUser sweep + dashboard;
+  C router+audit+OpenAPI bearer+frontend API Keys view;
+  D live proof script + HANDOFF.
+- pytest 108/108 re-run at spec commit (doc-only house rule).
 
 ### 2026-08-20 (session 7): FEATURE 3 COMPLETE (Phases A-E + live proofs)
 - Spec ratified by USER; phases built: A models+migration (RemediationRule/
@@ -576,22 +590,57 @@ text reminder per pending review, one time, v1.
   as TestClient) to avoid aiosqlite cross-loop errors. test_db_path is
   exposed on app.state for the tamper test's raw sqlite3 access.
 
-## Sequence for next session
+## Sequence for next session (feature 4 build)
 
-1. Recover terminal; run pytest; fix until green (test_auth, test_workflow,
-   test_audit_tamper ‚Äî 10 tests total).
-2. uv add psycopg2-binary asyncpg (prod drivers) ‚Äî verify db_url_sync
-   maps postgresql+asyncpg ‚Üí postgresql+psycopg2 for Alembic.
-3. Frontend: Vite React-TS scaffold, typed client from /api/openapi.json,
-   views per REQUIREMENTS.md section 4, build ‚Üí backend/static/.
-4. Docker: Dockerfile (multi-stage node‚Üípython), compose.yaml (5 services
-   per contract), nginx.conf, smoke.sh.
-5. docker compose up --build; run smoke.sh; prove kill-a-replica survives.
-6. git init + first commit. Report to user with [V]-labeled results.
+Spec is RATIFIED - build may start immediately. Corruption guard ON
+for every write (AST-check python, junk-grep, CRLF-normalize).
+
+1. Phase A: migration 0006 (api_keys table), models/apikey.py,
+  core/apikeys.py (generate/parse/hash pure functions, unit tests).
+  Apply migration on the live stack + verify via psql.
+2. Phase B: deps.py - Bearer path in get_current_user (parse id ->
+  fetch -> compare_digest -> active/expiry -> ApiKeyPrincipal),
+  read-only choke + keys-manage-keys choke at principal layer,
+  SessionUser alias; sweep routers per spec D4 list (auth/me,
+  logout, change-password, reviews queue/count/history/submit);
+  dashboard mixed payload + principal flag. FULL suite must stay
+  green (cookie-flow regression proof).
+3. Phase C: routers/apikeys.py (GET list, POST create 201 + key ONCE,
+  POST {id}/revoke idempotent; 409 dup name, 400 bad/past role+date),
+  audit entries in-TX, OpenAPI bearer scheme; frontend: client.ts
+  apiKeys namespace, ApiKeys.tsx view (table/prefix mono/role chip/
+  status derived/reveal-once modal/copy/revoke confirm), nav +
+  route, system_admin only. TSC 0 + vite build.
+4. Phase D: scripts/live_apikey_check.py on the stack (create via
+  cookie -> Bearer reads -> 403 writes -> 403 key-mgmt -> revoke ->
+  401 -> audit chain verify), HANDOFF update, commit.
+5. Each phase: pytest green + stack healthy + commit (msg-file
+  method for trailers) + TSC when frontend touched.
 
 ## User's exact words for the new chat
 
-"Continue the IAG rebuild at D:\Projects\iag ‚Äî read HANDOFF.md first."
+"Continue the IAG rebuild at D:\Projects\iag - read
+HANDOFF.md first. Feature 4 (API keys) is spec-ratified; start the
+build at Phase A and follow the Sequence section."
+
+## USER DECISIONS RATIFIED (2026-08-20, session 8)
+
+1. **Feature-4 spec D1-D7: RATIFIED AS DRAFTED** (`All ratified`).
+   - D1: keys READ-ONLY, roles auditor + report_viewer only (the
+     big one - enforcement at principal layer, not per-router).
+   - D2: iag_{id}_{token_urlsafe(32)}, SHA-256 hash at rest, prefix
+     shown in list, full key returned ONCE at create.
+   - D3: Authorization Bearer header ONLY (no X-API-Key, no query).
+   - D4: SessionUser alias for personal endpoints (403 for keys);
+     dashboard mixed payload (portfolio real, personal zeroed).
+   - D5: create/list/revoke only; soft revoke; rows permanent;
+     rotation = create + revoke; optional expires_at (null=never).
+   - D6: lifecycle-only audit (api_key_created/api_key_revoked);
+     last_used_at best-effort 60s throttle, no per-request audit.
+   - D7: no rate limiting this feature; revisit at nginx if ever
+     exposed beyond localhost (feature-5 SIEM polling may revisit).
+   - Bundled: ARCHITECTURE.md design-slots gains the API-keys line;
+     ratification recorded here. Build phases A-D may proceed.
 
 ## USER DECISIONS RATIFIED (2026-08-18, session close)
 

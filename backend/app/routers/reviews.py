@@ -10,7 +10,7 @@ from app.core.sod_engine import violations_for_identities
 from app.models.campaign import Campaign, CampaignStatus, Review, ReviewStatus
 from app.models.identity import Identity, utcnow
 from app.models.source import Account
-from app.routers.deps import AnyUser, DbSession
+from app.routers.deps import AnyUser, DbSession, SessionUser
 router = APIRouter(prefix="/api/reviews", tags=["reviews"])
 DECISIONS = {"approve", "revoke"}
 class SubmitIn(BaseModel):
@@ -21,7 +21,7 @@ class BulkSubmitIn(BaseModel):
     decision: str = Field(pattern="^(approve|revoke)$")
     comments: str | None = None
 @router.get("/queue")
-async def my_queue(db: DbSession, user: AnyUser, page: int = 1, page_size: int = 50):
+async def my_queue(db: DbSession, user: SessionUser, page: int = 1, page_size: int = 50):
     total = (
         await db.execute(
             select(func.count()).select_from(Review)
@@ -51,7 +51,7 @@ async def my_queue(db: DbSession, user: AnyUser, page: int = 1, page_size: int =
         })
     return {"total": total, "page": page, "items": items}
 @router.get("/count")
-async def my_count(db: DbSession, user: AnyUser):
+async def my_count(db: DbSession, user: SessionUser):
     n = (
         await db.execute(
             select(func.count()).select_from(Review)
@@ -61,7 +61,7 @@ async def my_count(db: DbSession, user: AnyUser):
     ).scalar_one()
     return {"count": n}
 @router.get("/history")
-async def my_history(db: DbSession, user: AnyUser, page: int = 1, page_size: int = 50):
+async def my_history(db: DbSession, user: SessionUser, page: int = 1, page_size: int = 50):
     rows = (
         await db.execute(
             select(Review, Account, Campaign)
@@ -151,7 +151,7 @@ async def _maybe_complete(db, user, campaign: Campaign) -> None:
                            action="campaign_completed", entity_type="campaign",
                            entity_id=campaign.id)
 @router.post("/{review_id}/submit")
-async def submit_review(review_id: int, body: SubmitIn, db: DbSession, user: AnyUser):
+async def submit_review(review_id: int, body: SubmitIn, db: DbSession, user: SessionUser):
     review = await db.get(Review, review_id)
     if review is None:
         raise HTTPException(404, "Review not found")
@@ -165,7 +165,7 @@ async def submit_review(review_id: int, body: SubmitIn, db: DbSession, user: Any
     await db.commit()
     return {"ok": True}
 @router.post("/bulk-submit")
-async def bulk_submit(body: BulkSubmitIn, db: DbSession, user: AnyUser):
+async def bulk_submit(body: BulkSubmitIn, db: DbSession, user: SessionUser):
     submitted = 0
     campaigns = {}
     for rid in body.review_ids:

@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from app.models.campaign import Campaign, CampaignStatus, Review, ReviewStatus
 from app.models.identity import Identity
 from app.models.source import Account
-from app.routers.deps import AnyUser, DbSession
+from app.routers.deps import AnyUser, DbSession, Principal
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 @router.get("")
 async def dashboard(db: DbSession, user: AnyUser):
@@ -34,6 +34,18 @@ async def dashboard(db: DbSession, user: AnyUser):
             .where(Campaign.status == CampaignStatus.ACTIVE)
         )
     ).scalar_one()
+    # D4 mixed payload: an API key gets real portfolio numbers and a
+    # zeroed personal block with an explicit principal flag, not a 403.
+    if getattr(user, "is_api_key", False):
+        return {
+            "identities": identities,
+            "accounts": accounts,
+            "unlinked_accounts": unlinked,
+            "privileged_accounts": privileged,
+            "active_campaigns": active_campaigns,
+            "my_pending_reviews": 0,
+            "principal": "api_key",
+        }
     my_pending = (
         await db.execute(
             select(func.count()).select_from(Review)

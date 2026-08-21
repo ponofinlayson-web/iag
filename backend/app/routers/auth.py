@@ -8,7 +8,7 @@ from app.core.audit_service import append_audit
 from app.core.security import hash_password, new_session_token, verify_password
 from app.models.identity import Identity, utcnow
 from app.models.user import Role, User
-from app.routers.deps import AnyUser, DbSession, _settings
+from app.routers.deps import DbSession, SessionUser, _settings
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=100)
@@ -68,7 +68,7 @@ async def login(body: LoginRequest, response: Response, db: DbSession):
     _session_cookie(response, token)
     return {"ok": True, "role": user.role.value}
 @router.get("/me")
-async def me(user: AnyUser):
+async def me(user: SessionUser):
     ident = user.identity
     return {
         "id": user.id,
@@ -78,11 +78,11 @@ async def me(user: AnyUser):
         "must_change_password": user.must_change_password,
     }
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(response: Response, user: SessionUser):
     response.delete_cookie("iag_session")
     return {"ok": True}
 @router.post("/change-password")
-async def change_password(body: ChangePasswordRequest, user: AnyUser, db: DbSession):
+async def change_password(body: ChangePasswordRequest, user: SessionUser, db: DbSession):
     if not verify_password(body.current_password, user.password_hash):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Current password incorrect")
     user.password_hash = hash_password(body.new_password)

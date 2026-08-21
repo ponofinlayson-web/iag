@@ -12,8 +12,6 @@ def test_login_bad_password(client):
 def test_login_lockout(client):
     for _ in range(5):
         client.post("/api/auth/login", json={"username": ADMIN_USERNAME, "password": "wrong"})
-    r = client.post("/api/auth/logout", json={})
-    assert r.status_code == 200
     r = client.post("/api/auth/login", json={"username": ADMIN_USERNAME, "password": "wrong"})
     assert r.status_code in (401, 423)
 def test_login_success_sets_cookie(admin_client):

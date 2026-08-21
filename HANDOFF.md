@@ -93,15 +93,48 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Nothing pending in code. Feature 4 (API keys): Phases A + B BUILT
-and committed (session 9): A = b9c499f (model/migration/pure fns,
-117/117), B = 53415f9 (principal wiring + SessionUser sweep,
-130/130 + live Postgres proof + cookie regression). NEXT: Phases
-C + D in a fresh chat (router + frontend, then live proof +
-HANDOFF). Feature 3 complete through E. Arc: 3/6 landed, feature 4
-half-built. Features 5 (risk/PDF/SIEM) and 6 (SCIM-class) still
-need specs + ratification before code.
+Nothing pending in code. Feature 4 (API keys) COMPLETE through D
+(session 10): A = b9c499f, B = 53415f9, C = 31eecff (router +
+OpenAPI bearer + API Keys view, 139/139), D = live proof PASS
+(chain 144 entries) + this HANDOFF. Arc: 4/6 landed. Features 5
+(risk/PDF/SIEM) and 6 (SCIM-class) still need specs + ratification
+before code.
 ## Session log (newest first)
+
+### 2026-08-21 (session 10): FEATURE 4 PHASES C + D - FEATURE COMPLETE
+
+- Phase C (31eecff): routers/apikeys.py (GET list newest-first prefix-
+  only, POST create 201 full key ONCE, POST {id}/revoke idempotent;
+  409 dup name; 400 unknown role / non-read role / past expires_at;
+  Role(value) conversion per gotcha 1; audit in-TX). main.py: router
+  mounted + app.openapi override adds bearerAuth scheme. Phase-B test
+  flipped 404->403 (branch removed as planned). New
+  test_apikeys_lifecycle.py (9 tests). Frontend: client.ts apiKeys
+  namespace, ApiKeys.tsx (prefix mono, role chip, derived status,
+  reveal-once modal + copy, two-step revoke confirm), nav + route
+  system_admin-only, modal/mono/key-box styles added. TSC 0, vite
+  build green, suite 139/139.
+- Phase D: scripts/live_apikey_check.py run on rebuilt stack (all 3
+  images rebuilt + force-recreated per gotcha 2). LIVE PASS: cookie
+  create (key + prefix match) -> key cannot list keys 403 -> dashboard
+  200 principal:api_key -> audit CSV export 200 non-empty ->
+  identities 200 -> write 403 read-only -> key-mint 403 -> chain
+  valid (143) -> revoke 200 -> revoked key 401 -> revoke idempotent
+  -> chain valid (144). Revoked probe row left in DB (audit evidence,
+  house convention).
+- GOTCHAS learned (C/D):
+  1. deps.py choke ORDER: method (read-only) fires before path
+     (keys-manage-keys) for POSTs - a POST /api/api-keys 403s with
+     "read-only", not "manage". Tests/scripts asserting the message
+     must accept either.
+  2. conftest lazy-tables: a raw second engine seeding a user works
+     ONLY after some DB-backed request ran (401 request suffices);
+     seeding before that = "no such table".
+  3. vite build output goes to backend/static (SPA mount) - rebuilt
+     containers pick the new frontend up via image rebuild, no
+     separate static step.
+  4. urlopen success path can return non-JSON (CSV export) - live
+     scripts need a text fallback in their call() helper.
 
 ### 2026-08-21 (session 9): FEATURE 4 PHASES A + B BUILT
 
@@ -653,10 +686,11 @@ for every write (AST-check python, junk-grep, CRLF-normalize).
   audit entries in-TX, OpenAPI bearer scheme; frontend: client.ts
   apiKeys namespace, ApiKeys.tsx view (table/prefix mono/role chip/
   status derived/reveal-once modal/copy/revoke confirm), nav +
-  route, system_admin only. TSC 0 + vite build.
+  route, system_admin only. TSC 0 + vite build. [DONE 31eecff]
 4. Phase D: scripts/live_apikey_check.py on the stack (create via
   cookie -> Bearer reads -> 403 writes -> 403 key-mgmt -> revoke ->
-  401 -> audit chain verify), HANDOFF update, commit.
+  401 -> audit chain verify), HANDOFF update, commit. [DONE - LIVE
+  PASS, chain 144 entries; HANDOFF + commit this session]
 5. Each phase: pytest green + stack healthy + commit (msg-file
   method for trailers) + TSC when frontend touched.
 
@@ -686,10 +720,12 @@ for every write (AST-check python, junk-grep, CRLF-normalize).
 ## User's exact words for the new chat
 
 "Continue the IAG rebuild at D:\Projects\iag - read
-HANDOFF.md first. Feature 4 (API keys) Phases A+B are built and
-committed (b9c499f, 53415f9; 130/130, stack rebuilt+proven live).
-Start at Phase C (router + frontend) and follow the Sequence
-section; close with Phase D (live proof + HANDOFF)."
+HANDOFF.md first. Feature 4 (API keys) is COMPLETE through Phase D
+(commits b9c499f, 53415f9, 31eecff; 139/139; live proof PASS,
+chain 144 entries). Feature 5 (risk/PDF/SIEM) needs its spec
+drafted next: read REQUIREMENTS.md + prior spec pattern, draft
+SPECS/feature-5-risk-reports-siem.md with open decisions for
+ratification, commit the draft, and stop for my review."
 
 ## USER DECISIONS RATIFIED (2026-08-20, session 8)
 

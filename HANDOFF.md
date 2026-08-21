@@ -617,6 +617,29 @@ for every write (AST-check python, junk-grep, CRLF-normalize).
 5. Each phase: pytest green + stack healthy + commit (msg-file
   method for trailers) + TSC when frontend touched.
 
+### Context-window protocol (applies to every build session)
+
+- Budget ONE fresh chat per 1-2 phases: chat 1 = Phases A+B, chat 2 =
+  Phases C+D. A phase that fights back (3+ failed fix iterations in a
+  row) ends the chat at the next green checkpoint instead of pushing
+  through on fumes.
+- Every phase boundary is a resume point: commit + append [DONE] to
+  the phase's Sequence step + one session-log line. A fresh chat
+  must be able to pick up at ANY phase boundary with zero loss.
+- Never end a chat mid-phase. If truly forced, record exact in-flight
+  state (files touched, test status, very next action) under
+  Unverified/in-flight BEFORE the chat ends.
+- Lean-output discipline: pytest -q piped to the last 2 lines; docker
+  build/compose logs tailed, never streamed; targeted Select-String
+  over full-file reads; never re-verify what this session already
+  proved [V] - the label carries.
+- Startup reading budget: this file + SPECS/feature-4-api-keys.md
+  fully; REQUIREMENTS/ARCHITECTURE only on demand (the spec encodes
+  the build). Do not cat whole source files unmodified this session.
+- Early-warning self-check: re-reading the same file twice, losing
+  phase state, or a fix loop past 3 attempts = STOP, checkpoint to
+  this file, tell the USER to open a fresh chat. Say so plainly.
+
 ## User's exact words for the new chat
 
 "Continue the IAG rebuild at D:\Projects\iag - read

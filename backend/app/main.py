@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.settings import Settings
-from app.routers import audit, auth, campaigns, dashboard, entitlements, identities, remediation, reminders, reviews, sod, sources, syncs
+from app.routers import apikeys, audit, auth, campaigns, dashboard, entitlements, identities, remediation, reminders, reviews, sod, sources, syncs
 settings = Settings()
 settings.validate_secrets()
 settings.validate_smtp()
@@ -49,6 +49,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="IAG", version="0.1.0", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
+
+
+def _openapi_with_bearer() -> dict:
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+    app.openapi_schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
+    schemes = app.openapi_schema.setdefault("components", {}).setdefault("securitySchemes", {})
+    schemes["bearerAuth"] = {"type": "http", "scheme": "bearer",
+                             "description": "API key in the form iag_{id}_{token} (read-only machine access)"}
+    return app.openapi_schema
+
+
+app.openapi = _openapi_with_bearer
 if settings.cors_origins:
     app.add_middleware(
         CORSMiddleware,
@@ -69,6 +83,7 @@ app.include_router(audit.router)
 app.include_router(dashboard.router)
 app.include_router(reminders.router)
 app.include_router(remediation.router)
+app.include_router(apikeys.router)
 @app.get("/api/health", tags=["system"])
 async def health():
     return {"status": "ok", "service": "iag-api", "version": "0.1.0"}

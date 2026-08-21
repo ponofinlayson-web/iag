@@ -108,15 +108,8 @@ def test_key_write_blocked_403(client):
 def test_key_cannot_manage_keys_403(client):
     key = _seed_key(client)
     r = client.get("/api/api-keys", headers=_hdr(key))
-    # Router lands in Phase C; until it exists the path 404s before any
-    # dependency runs. Phase C tightens this to == 403.
-    from app.main import app
-    paths = {getattr(route, "path", None) for route in app.routes}
-    if "/api/api-keys" in paths:
-        assert r.status_code == 403
-        assert "manage" in r.json()["detail"]
-    else:
-        assert r.status_code == 404
+    assert r.status_code == 403
+    assert "manage" in r.json()["detail"]
 
 
 def test_key_personal_endpoints_403(client):

@@ -12,6 +12,7 @@ import Reviews from "./views/Reviews";
 import Audit from "./views/Audit";
 import SodRules from "./views/SodRules";
 import Remediation from "./views/Remediation";
+import ApiKeys from "./views/ApiKeys";
 import Outbox from "./views/Outbox";
 
 export default function App() {
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/campaigns/:id" element={<CampaignDetail />} />
         <Route path="/sod" element={<SodRules />} />
         <Route path="/remediation" element={<Remediation />} />
+      <Route path="/api-keys" element={<ApiKeys />} />
         <Route path="/outbox" element={<Outbox />} />
         <Route path="/reviews" element={<Reviews />} />
         <Route path="/audit" element={<Audit />} />

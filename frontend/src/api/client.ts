@@ -349,6 +349,27 @@ export interface CampaignInput {
   deadline?: string | null;
 }
 
+export interface ApiKeyRow {
+  id: number;
+  name: string;
+  key_prefix: string;
+  role: Role;
+  is_active: boolean;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_at: string | null;
+}
+
+export interface ApiKeyCreated extends ApiKeyRow {
+  key: string;
+}
+
+export interface ApiKeyInput {
+  name: string;
+  role: string;
+  expires_at?: string | null;
+}
+
 export const api = {
   auth: {
     login: (username: string, password: string) =>
@@ -544,6 +565,18 @@ export const api = {
       request<RemediationSettings>("/api/remediation/settings", {
         method: "PUT",
         body: JSON.stringify(input),
+      }),
+  },
+  apiKeys: {
+    list: () => request<{ items: ApiKeyRow[] }>("/api/api-keys"),
+    create: (input: ApiKeyInput) =>
+      request<ApiKeyCreated>("/api/api-keys", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    revoke: (id: number) =>
+      request<{ ok: boolean; already_revoked: boolean }>(`/api/api-keys/${id}/revoke`, {
+        method: "POST",
       }),
   },
 };

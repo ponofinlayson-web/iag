@@ -109,3 +109,19 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
 .actions { display: flex; gap: 8px; }
 
 .pager { display: flex; gap: 8px; align-items: center; margin-top: 12px; color: var(--muted); font-size: 13px; }
+
+.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55);
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+}
+.modal {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 20px; width: min(560px, calc(100vw - 48px));
+}
+.modal h3 { margin: 0 0 8px; }
+.key-box {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px; word-break: break-all; user-select: all;
+}

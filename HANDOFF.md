@@ -582,3 +582,19 @@ text reminder per pending review, one time, v1.
    "Secrets" documents the deferral and the migration-0005 (or later)
    backfill path. D1 new-deps list is therefore `ldap3` + `httpx` only.
    Build phases A–E may proceed.
+
+## USER DECISIONS RATIFIED (2026-08-20, session 6)
+
+4. **Feature-3 spec D1-D7: RATIFIED AS DRAFTED** ("ratify all").
+   - D1: drop v1 disable_account + remove_entitlement; remediation =
+     workflow layer (rules, approval gate, notify_owner / webhook
+     delivery); enforcement write-back is feature 6's scope.
+   - D2: remediation email bypasses EmailOutbox; the remediation
+     worker sends SMTP directly; the action row is the delivery record.
+   - D3: revoke-only trigger. D4: single-row remediation_settings
+     table. D5: retry keeps attempts, one attempt per retry click.
+   - D6: regex compiled at rule save, backtracking risk accepted.
+     D7: source-owner email as recipient.
+   - Bundled: ARCHITECTURE.md design-slots list gains the remediation
+     line; ratification recorded here (this entry).
+   Build phases A-E may proceed.

@@ -66,6 +66,8 @@ Dockerfile            multi-stage: node build then python runtime
 - Live LDAP/Entra/SQL connectors: background sync tasks inside app replicas.
 - Email: outbound only, via an in-app task queue. Never a writer.
 - SoD engine: read-side computation; rule writes follow audit discipline.
+- Remediation: revoke-triggered workflow, notification, and hand-off —
+  enforcement write-back is a future, separately-specced feature.
 - External anchoring of the audit chain (weekly digest to a tamper-
   resistant location).
 - Read replicas: possible later, always read-only.

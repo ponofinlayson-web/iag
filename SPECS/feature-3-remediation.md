@@ -1,11 +1,12 @@
 # Feature 3 — Remediation (revoke → rule → action → delivery)
 
-Status: DRAFT — awaiting USER ratification. Nothing below is built yet.
+Status: RATIFIED 2026-08-20 (D1–D7 all as drafted; see Open decisions
+for what each decided). Build phases A–E may proceed. Nothing below is
+built yet.
 Fills the REQUIREMENTS.md §4 deferred list ("remediation") and the
-ARCHITECTURE.md design-slot intent for workflow automation inside the
-app's own write path. (Note: ARCHITECTURE.md design slots name
-connectors/email/SoD explicitly; remediation is the next reserved slot
-by the §4 deferred list — this spec is that slot's contract.)
+ARCHITECTURE.md design slot "Remediation: revoke-triggered workflow,
+notification, and hand-off — enforcement write-back is a future,
+separately-specced feature." (Slot line added at ratification.)
 
 ## Goal
 

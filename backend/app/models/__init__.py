@@ -12,9 +12,10 @@ from app.models.remediation import (
     RemediationAction,
     RemediationSettings,
 )
+from app.models.apikey import ApiKey
 
 __all__ = [
     "Identity", "User", "DataSource", "Account", "Entitlement", "Campaign", "Review",
     "AuditEntry", "SodRule", "EmailOutbox", "SyncRun",
-    "RemediationRule", "RemediationAction", "RemediationSettings",
+    "RemediationRule", "RemediationAction", "RemediationSettings", "ApiKey",
 ]

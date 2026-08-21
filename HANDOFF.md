@@ -88,9 +88,12 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Nothing pending in code. Feature 3 (remediation) spec is DRAFTED and
-COMMITTED (67aa079, `SPECS/feature-3-remediation.md`) — awaiting USER
-ratification of decisions D1–D7. NO feature-3 code before that.
+Nothing pending in code. Feature 3 (remediation) is COMPLETE through
+Phase E (live proofs PASS) — spec ratified by USER, all phases built,
+pytest 108/108, TSC clean, stack healthy, live E2E proof PASS.
+Arc: 3/6 landed (1 email templates, 2 connectors, 3 remediation).
+Next: feature 4 (API keys) needs a NEW spec + USER ratification BEFORE
+any code — same pattern as feature 3.
 Feature 2 (live connectors) COMPLETE through Phase E:
 - Phase A (models+migration 0004+settings, d07d706), Phase B (sync
   worker, cfbb92b), Phase C (adapters, 2fdeab2), Phase D (API +
@@ -103,6 +106,36 @@ ratification required before each of features 4-6 as well.
 
 ## Session log (newest first)
 
+### 2026-08-20 (session 7): FEATURE 3 COMPLETE (Phases A-E + live proofs)
+- Spec ratified by USER; phases built: A models+migration (RemediationRule/
+  RemediationAction/settings), B engine+trigger+worker, C none needed
+  (email/webhook handled in worker), D API + frontend Remediation view,
+  E live E2E proof.
+- Live proof PASS (scripts/live_remediation_check.py, commit 14c6aae):
+  SQL sync (planted table) -> campaign -> revoke -> trigger creates
+  actions for matched rules AND default action when nothing matched ->
+  worker executes: low-priv notify_owner email delivers without approval
+  (real SMTP to aiosmtpd sink); high/very_high gated pending_approval
+  (require_approval_for_high_risk setting); privilege-keyed webhook rule
+  through approve -> real HTTP sink (host.docker.internal:8642);
+  audit chain valid end-to-end.
+- SMTP env added to .env: IAG_SMTP_HOST=host.docker.internal,
+  IAG_SMTP_PORT=1025, IAG_SMTP_FROM=iag@localhost (+ dummy USER/PASSWORD
+  because validate_smtp requires them; sink ignored auth).
+- KNOWN NUANCE (design, not bug): connector-synced accounts keep
+  Account.entitlement_id NULL (catalog-is-truth decision, feature 2).
+  remediation entitlement_pattern therefore only matches CSV-imported
+  accounts; privilege_level/data_source_id filters match everywhere.
+  Documented here + in proof script comments.
+- Reviews queue is reviewer-scoped (/api/reviews/queue), no
+  list-by-campaign endpoint; source_owner mode resolves reviewer =
+  source owner's identity, which MUST have a login (else review
+  silently skipped in preview/start - campaign shows 0 reviews).
+  Proof worked around by owning the source as admin's identity.
+- All 3 replicas rebuilt on same image (round-robin stale-image 404s
+  lesson re-applied); workers poll 30s.
+- Gates at close: pytest 108/108, TSC 0, stack healthy, tree clean
+  @ 14c6aae.
 ### 2026-08-20 (session 6): FEATURE 3 SPEC DRAFTED (no code)
 
 - Commit 67aa079: `SPECS/feature-3-remediation.md` (319 lines,

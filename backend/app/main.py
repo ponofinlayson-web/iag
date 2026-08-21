@@ -33,12 +33,15 @@ async def lifespan(app: FastAPI):
         return
     from app.core.email_worker import worker_loop
     from app.core.sync_worker import connector_worker_loop
+    from app.core.remediation_worker import remediation_worker_loop
     task = asyncio.create_task(worker_loop())
     sync_task = asyncio.create_task(connector_worker_loop())
+    remediation_task = asyncio.create_task(remediation_worker_loop())
     yield
     task.cancel()
     sync_task.cancel()
-    for t in (task, sync_task):
+    remediation_task.cancel()
+    for t in (task, sync_task, remediation_task):
         try:
             await t
         except asyncio.CancelledError:

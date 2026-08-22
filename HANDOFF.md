@@ -93,14 +93,23 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Nothing pending in code. Feature 5 (risk/PDF/SIEM) spec is
-DRAFTED (SPECS/feature-5-risk-reports-siem.md, session 11) and
-AWAITING USER ratification of D1-D8. NO feature-5 code before
-ratification. Feature 4 (API keys) COMPLETE through D (session
-10): A = b9c499f, B = 53415f9, C = 31eecff, D = 5cd3828; 139/139;
-live proof PASS (chain 144 entries). Arc: 4/6 landed. Feature 6
+Feature 5 (risk/reports/SIEM) spec RATIFIED (session 12; D1-D8 as
+drafted, recorded in spec header + ARCHITECTURE.md design slots +
+ratified-decisions block below). Build IN PROGRESS this session:
+Phase A first (migration 0007, models/risk.py, core/risk_engine.py,
+7-signal unit tests). Feature 4 (API keys) COMPLETE (session 10):
+139/139, live proof PASS (chain 144). Arc: 4/6 landed. Feature 6
 (SCIM-class) needs its spec after feature 5.
 ## Session log (newest first)
+
+### 2026-08-21 late (session 12): FEATURE 5 RATIFIED - BUILD STARTS
+
+- User ratified D1-D8 as drafted ("Ratified"). Recorded in spec
+  header, ARCHITECTURE.md design slots, ratified block below.
+- Ratification commit re-ran pytest 139/139 (doc-only house rule).
+- Building Phases A+B this chat per context-window protocol;
+  C+D next chat, E closes the feature.
+
 
 ### 2026-08-21 (session 11): FEATURE 5 SPEC DRAFTED (no code)
 
@@ -755,6 +764,28 @@ HANDOFF.md first. Feature 5 (risk/PDF/SIEM) spec is RATIFIED
 (D1-D8 as drafted, recorded in the spec header + ARCHITECTURE
 design slots). Build Phases A+B in this chat and stop at the
 phase boundary per the context-window protocol."
+
+## USER DECISIONS RATIFIED (2026-08-21 late, session 12)
+
+1. **Feature-5 spec D1-D8: RATIFIED AS DRAFTED** ("Ratified").
+   - D1: SIEM feed is PULL-ONLY (the big one) - GET /api/audit/feed
+     JSONL with after_id cursor + chain hashes; no push forwarder,
+     no provider formatters, no SIEM credentials anywhere.
+   - D2: one feature bundling risk + PDF + SIEM (shared guards and
+     consumers). D3: 7 transparent signals, fixed weights
+     20/20/20/10/10/10/10, bands 25/50/75; dormancy renamed
+     unreviewed_access (review-decision recency - no usage
+     telemetry exists).
+   - D4: explicit admin POST triggers risk runs; snapshots permanent;
+     no scheduler. D5: feed auth = auditor-role API key only.
+   - D6: PDF = print-CSS SPA view + browser print-to-PDF; nothing
+     server-side, no PDF library. D7: no new API-key roles;
+     report/risk GETs accept report_viewer keys, feed stays
+     auditor-only. D8: zero new dependencies.
+   - Bundled: ARCHITECTURE.md design-slots line added ("Risk,
+     reports, and SIEM feed: read-side computation over governed
+     data; SIEM is pull-only."); ratification recorded here.
+     Build phases A-E may proceed.
 
 ## USER DECISIONS RATIFIED (2026-08-20, session 8)
 

@@ -72,4 +72,6 @@ Dockerfile            multi-stage: node build then python runtime
   resistant location).
 - API keys: bearer-token machine access, read-only, role-scoped
   (auditor/report_viewer only).
+- Risk, reports, and SIEM feed: read-side computation over governed
+  data; SIEM is pull-only.
 - Read replicas: possible later, always read-only.

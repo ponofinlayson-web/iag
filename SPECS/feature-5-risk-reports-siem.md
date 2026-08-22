@@ -1,6 +1,8 @@
 # Feature 5 - Risk scoring, PDF reports, SIEM feed
 
-Status: DRAFT, awaiting ratification. Nothing below is built yet.
+Status: RATIFIED (user: "Ratified", session 12, 2026-08-21 late). D1-D8
+as drafted. Phases A-E unlocked; D1 SIEM pull-only is the locked
+divergence from v1.
 Fills three REQUIREMENTS.md 4 deferred-list entries ("risk scoring,
 PDF reports, SIEM") in one feature because they share one surface:
 they are the read-side outputs of the governance data features 1-4

@@ -14,10 +14,11 @@ from app.models.remediation import (
 )
 from app.models.apikey import ApiKey
 from app.models.risk import RiskSnapshot
+from app.models.scim import ScimSettings
 
 __all__ = [
     "Identity", "User", "DataSource", "Account", "Entitlement", "Campaign", "Review",
     "AuditEntry", "SodRule", "EmailOutbox", "SyncRun",
     "RemediationRule", "RemediationAction", "RemediationSettings", "ApiKey",
-    "RiskSnapshot",
+    "RiskSnapshot", "ScimSettings",
 ]

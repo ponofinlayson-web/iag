@@ -30,6 +30,20 @@ class RemediationStatus:
 class RemediationActionType:
     NOTIFY_OWNER = "notify_owner"
     WEBHOOK = "webhook"
+    ENFORCE = "enforce"
+
+
+class RemediationEnforceTarget:
+    """feature-6 D6: least-destructive default for the most dangerous class."""
+
+    REMOVE_ENTITLEMENT = "remove_entitlement"
+    DISABLE_ACCOUNT = "disable_account"
+
+
+ENFORCE_TARGETS = {
+    RemediationEnforceTarget.REMOVE_ENTITLEMENT,
+    RemediationEnforceTarget.DISABLE_ACCOUNT,
+}
 
 
 # Single-row settings store (D4). Whole-value JSON replaced on write.
@@ -56,6 +70,9 @@ class RemediationRule(Base):
     # (validated) at rule save (D6) — see routers/remediation.py.
     entitlement_pattern: Mapped[str | None] = mapped_column(String(255), nullable=True)
     action: Mapped[str] = mapped_column(String(50), default=RemediationActionType.NOTIFY_OWNER)
+    # feature-6: enforce rules pick a directory write-back target; null =
+    # remove_entitlement (D6 least-destructive default). Plain column, no enum.
+    target: Mapped[str | None] = mapped_column(String(20), nullable=True)
     webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     require_approval: Mapped[bool] = mapped_column(Boolean, default=False)

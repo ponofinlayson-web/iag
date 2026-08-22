@@ -21,10 +21,11 @@ PAGE_MAX_COUNT = 200
 class ScimError(Exception):
     """Protocol-level failure; the router renders it as a SCIM error envelope."""
 
-    def __init__(self, status: int, detail: str):
+    def __init__(self, status: int, detail: str, headers: dict[str, str] | None = None):
         super().__init__(detail)
         self.status = status
         self.detail = detail
+        self.headers = headers
 
     def envelope(self) -> dict:
         return {"schemas": [ERROR_SCHEMA], "status": str(self.status), "detail": self.detail}
@@ -241,5 +242,13 @@ def normalize_patch(payload: dict) -> dict:
             raise ScimError(
                 400, "replace without path requires an object value keyed by attribute"
             )
+    # Fold dotted name paths into the nested "name" object the In-mapping
+    # reads; a flat "name.givenName" key would be invisible to it.
+    name: dict = {}
+    for dotted in ("name.givenName", "name.familyName"):
+        if dotted in merged:
+            name[dotted.split(".", 1)[1]] = merged.pop(dotted)
+    if name:
+        merged["name"] = name
     return merged
 

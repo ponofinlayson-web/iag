@@ -218,7 +218,18 @@ def test_normalize_patch_path_form_case_insensitive():
     merged = normalize_patch({
         "Operations": [{"op": "Replace", "path": "Name.familyName", "value": "Smith"}]
     })
-    assert merged == {"name.familyName": "Smith"}
+    assert merged == {"name": {"familyName": "Smith"}}
+    # Dotted paths fold into the nested name object the In-mapping reads
+    assert scim_to_identity_fields(merged) == {"last_name": "Smith"}
+
+
+def test_normalize_patch_name_only_reaches_identity_fields():
+    # Regression: flat "name.givenName" keys were invisible to the
+    # In-mapping - a name-only PATCH silently no-opped.
+    merged = normalize_patch({"Operations": [
+        {"op": "replace", "path": "name.givenName", "value": "A"}
+    ]})
+    assert scim_to_identity_fields(merged) == {"first_name": "A"}
 
 
 def test_normalize_patch_multiple_ops_merge():

@@ -6,11 +6,15 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.core.settings import Settings
-from app.routers import apikeys, audit, auth, campaigns, dashboard, entitlements, identities, remediation, reminders, reviews, risk, sod, sources, syncs
+from app.core.scim import ScimError
+from app.routers import apikeys, audit, auth, campaigns, dashboard, entitlements, identities, remediation, reminders, reviews, risk, scim, sod, sources, syncs
 settings = Settings()
 settings.validate_secrets()
 settings.validate_smtp()
@@ -85,6 +89,27 @@ app.include_router(reminders.router)
 app.include_router(remediation.router)
 app.include_router(apikeys.router)
 app.include_router(risk.router)
+app.include_router(scim.router)
+
+
+@app.exception_handler(ScimError)
+async def scim_error_handler(request: Request, exc: ScimError) -> JSONResponse:
+    """RFC 7644 error envelope for every SCIM-surface failure."""
+    return JSONResponse(status_code=exc.status, content=exc.envelope(), headers=exc.headers)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    """SCIM paths render 422s as 400 SCIM envelopes (protocol surface);
+    every other path keeps FastAPI's default response, byte-identical.
+    Returns (never raises - a raise inside a handler escapes to the 500
+    middleware, it does not re-enter this app's handlers)."""
+    if request.url.path.startswith("/api/scim/"):
+        first = exc.errors()[0] if exc.errors() else {}
+        where = ".".join(str(p) for p in first.get("loc", []))
+        envelope = ScimError(400, f"Invalid request body at {where}: {first.get('msg', 'validation error')}")
+        return JSONResponse(status_code=envelope.status, content=envelope.envelope())
+    return await request_validation_exception_handler(request, exc)
 @app.get("/api/health", tags=["system"])
 async def health():
     return {"status": "ok", "service": "iag-api", "version": "0.1.0"}

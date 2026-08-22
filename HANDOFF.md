@@ -93,22 +93,39 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Feature 5 (risk/reports/SIEM) spec RATIFIED (session 12; D1-D8 as
-drafted, recorded in spec header + ARCHITECTURE.md design slots +
-ratified-decisions block below). Build IN PROGRESS this session:
-Phase A first (migration 0007, models/risk.py, core/risk_engine.py,
-7-signal unit tests). Feature 4 (API keys) COMPLETE (session 10):
-139/139, live proof PASS (chain 144). Arc: 4/6 landed. Feature 6
-(SCIM-class) needs its spec after feature 5.
+Feature 5 (risk/reports/SIEM) RATIFIED (57e4f1a) + Phases A+B BUILT
+(session 12): A = 980acb7 (migration 0007, models/risk.py, pure
+risk_engine 7 signals, 12 unit tests), B = ac6da0a (routers/risk.py
+4 endpoints, ReportViewer alias, 8 API tests). Suite 159/159.
+LIVE: migration 0007 applied to the real Postgres volume [V]
+(alembic_version=0007, risk_snapshots present, 0 rows); app image
+rebuilt once; app replicas still run the PRE-feature-5 image
+(no /api/risk routes live) - harmless, they are rebuilt+recreated
+at Phase C/D/E per protocol. ENVIRONMENT: Docker Desktop
+crash-looped 3x this session (daemon dies after ~2-4 min; also
+crashed once in session 11); if it recurs, restart Docker Desktop,
+`docker compose up -d`, and do not trust a wedge - reset the
+agent-canvas terminal. NEXT: Phases C+D in a fresh chat (SIEM feed
++ report backend + frontend), then E (live proofs + HANDOFF).
+Feature 4 COMPLETE (session 10): 139/139 then, live proof PASS.
+Arc: 4/6 landed. Feature 6 (SCIM-class) needs its spec after 5.
 ## Session log (newest first)
 
 ### 2026-08-21 late (session 12): FEATURE 5 RATIFIED - BUILD STARTS
 
 - User ratified D1-D8 as drafted ("Ratified"). Recorded in spec
   header, ARCHITECTURE.md design slots, ratified block below.
-- Ratification commit re-ran pytest 139/139 (doc-only house rule).
-- Building Phases A+B this chat per context-window protocol;
-  C+D next chat, E closes the feature.
+- Ratification commit 57e4f1a re-ran pytest 139/139 (doc-only
+  house rule).
+- Phase A (980acb7): migration 0007 + models/risk.py + pure
+  core/risk_engine.py (7 signals, weights fixed, caps at weight
+  per signal, bands 25/50/75) + 12 unit tests (151/151).
+- Phase B (ac6da0a): routers/risk.py (POST /runs 202 one-TX
+  persist+audit, GET /snapshots filters, /trend/{id}, /summary),
+  ReportViewer alias in deps.py, 8 API tests (159/159).
+- LIVE: 0007 applied to real Postgres [V]. Docker Desktop
+  crash-looped 3x (env watch item, details in in-flight).
+- Session stopped at the A+B boundary per context-window protocol.
 
 
 ### 2026-08-21 (session 11): FEATURE 5 SPEC DRAFTED (no code)
@@ -705,13 +722,13 @@ ratified-decisions block below - same pattern as features 3-4).
 Corruption guard ON for every write (AST-check python, junk-grep,
 dup-line check; writes under ~120 lines).
 
-1. Phase A: migration 0007 (risk_snapshots: run_id, identity FK
+1. Phase A [DONE 980acb7]: migration 0007 (risk_snapshots: run_id, identity FK
   SET NULL + frozen employee_id, score/band/signals/factors JSON,
   computed_at; indexes run_id + (identity_id, computed_at)),
   models/risk.py, core/risk_engine.py pure signals (sod_engine
   shape; settings kwarg gotcha - use env vars in tests), unit
   tests for all 7 signals + weights-sum + clamp + bands.
-2. Phase B: routers/risk.py (POST /runs 202 one-TX persist+audit
+2. Phase B [DONE ac6da0a]: routers/risk.py (POST /runs 202 one-TX persist+audit
   risk_run_completed, GET /snapshots latest-run default + run_id/
   band/department/page, GET /trend/{id}, GET /summary),
   ReportViewer alias in deps.py (report_viewer/auditor/cert_admin/
@@ -760,10 +777,12 @@ dup-line check; writes under ~120 lines).
 ## User's exact words for the new chat
 
 "Continue the IAG rebuild at D:\Projects\iag - read
-HANDOFF.md first. Feature 5 (risk/PDF/SIEM) spec is RATIFIED
-(D1-D8 as drafted, recorded in the spec header + ARCHITECTURE
-design slots). Build Phases A+B in this chat and stop at the
-phase boundary per the context-window protocol."
+HANDOFF.md first. Feature 5 (risk/PDF/SIEM): spec RATIFIED,
+Phases A+B are DONE and committed (980acb7, ac6da0a, suite
+159/159, migration 0007 already applied live). Build Phases
+C+D in this chat (SIEM feed, campaign report backend,
+frontend Risk view + report route) and stop at the phase
+boundary per the context-window protocol."
 
 ## USER DECISIONS RATIFIED (2026-08-21 late, session 12)
 

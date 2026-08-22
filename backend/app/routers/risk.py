@@ -161,7 +161,9 @@ async def identity_trend(identity_id: int, db: DbSession, user: ReportViewer):
         await db.execute(
             select(RiskSnapshot)
             .where(RiskSnapshot.identity_id == identity_id)
-            .order_by(RiskSnapshot.computed_at.asc(), RiskSnapshot.id.asc())
+            # id order, not computed_at: a clock step (VM drift resync) can
+            # stamp a later run earlier; ids are monotonic per transaction
+            .order_by(RiskSnapshot.id.asc())
         )
     ).scalars().all()
     return {

@@ -165,6 +165,31 @@ def test_trend_across_runs(admin_client):
     assert admin_client.get("/api/risk/trend/99999").status_code == 404
 
 
+def test_trend_survives_clock_step(admin_client):
+    """A VM clock step can stamp a later run with an earlier computed_at
+    (seen live: run2 .840 < run1 .884). Trend must follow id order, not
+    timestamp order - timestamps lie, ids do not."""
+    import sqlalchemy as sa
+    from app.models.risk import RiskSnapshot
+
+    ids = _seed(admin_client)
+    first = admin_client.post("/api/risk/runs").json()
+    second = admin_client.post("/api/risk/runs").json()
+
+    async def _invert():
+        async for s in _direct_session(admin_client):
+            await s.execute(
+                sa.update(RiskSnapshot)
+                .where(RiskSnapshot.run_id == second["run_id"])
+                .values(computed_at=sa.text("datetime('now', '-10 days')"))
+            )
+            await s.commit()
+
+    asyncio.run(_invert())
+    tr = admin_client.get(f"/api/risk/trend/{ids['E-1']}").json()["items"]
+    assert [t["run_id"] for t in tr] == [first["run_id"], second["run_id"]], tr
+
+
 def test_summary_shape(admin_client):
     _seed(admin_client)
     run = admin_client.post("/api/risk/runs").json()

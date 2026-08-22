@@ -93,13 +93,33 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Nothing pending in code. Feature 4 (API keys) COMPLETE through D
-(session 10): A = b9c499f, B = 53415f9, C = 31eecff (router +
-OpenAPI bearer + API Keys view, 139/139), D = live proof PASS
-(chain 144 entries) + this HANDOFF. Arc: 4/6 landed. Features 5
-(risk/PDF/SIEM) and 6 (SCIM-class) still need specs + ratification
-before code.
+Nothing pending in code. Feature 5 (risk/PDF/SIEM) spec is
+DRAFTED (SPECS/feature-5-risk-reports-siem.md, session 11) and
+AWAITING USER ratification of D1-D8. NO feature-5 code before
+ratification. Feature 4 (API keys) COMPLETE through D (session
+10): A = b9c499f, B = 53415f9, C = 31eecff, D = 5cd3828; 139/139;
+live proof PASS (chain 144 entries). Arc: 4/6 landed. Feature 6
+(SCIM-class) needs its spec after feature 5.
 ## Session log (newest first)
+
+### 2026-08-21 (session 11): FEATURE 5 SPEC DRAFTED (no code)
+
+- Agent services crashed+restarted mid-recon; state verified intact
+  (tree clean @ 5cd3828, no orphan files) - zero rework needed.
+- SPECS/feature-5-risk-reports-siem.md drafted (347 lines, 3 parts):
+  risk scoring (7 signals, weights 20/20/20/10/10/10/10, bands
+  25/50/75, run-grouped snapshots, pure risk_engine), campaign
+  report (JSON GET + print-CSS SPA view + browser print-to-PDF,
+  streamed CSV), SIEM pull-only feed (JSONL /api/audit/feed with
+  after_id cursor + chain hashes, auditor API key, /feed/stats).
+- v1 mining: risk_service.py (7-signal shape KEPT), siem_service.py
+  (push forwarder DROPPED - threading.Thread, queue drops), report
+  endpoints (v1 abandoned WeasyPrint mid-project for print-to-PDF -
+  ADOPTED as v2 start). Report CSVs to server disk = designed out.
+- 8 open decisions D1-D8; D1 = SIEM pull-only (the big one).
+- pytest 139/139 re-run at draft commit (doc-only house rule).
+- STOPPED FOR RATIFICATION - no feature-5 code until user replies.
+
 
 ### 2026-08-21 (session 10): FEATURE 4 PHASES C + D - FEATURE COMPLETE
 
@@ -666,33 +686,44 @@ text reminder per pending review, one time, v1.
   as TestClient) to avoid aiosqlite cross-loop errors. test_db_path is
   exposed on app.state for the tamper test's raw sqlite3 access.
 
-## Sequence for next session (feature 4 build)
+## Sequence for next session (feature 5 build)
 
-Spec is RATIFIED - build may start immediately. Corruption guard ON
-for every write (AST-check python, junk-grep, CRLF-normalize).
+GATED ON RATIFICATION: if the user has not ratified D1-D8, stop and
+ask. If ratified, record it in 3 places first (spec header,
+ARCHITECTURE.md design-slots line: "Risk, reports, and SIEM feed:
+read-side computation over governed data; SIEM is pull-only.",
+ratified-decisions block below - same pattern as features 3-4).
+Corruption guard ON for every write (AST-check python, junk-grep,
+dup-line check; writes under ~120 lines).
 
-1. Phase A: migration 0006 (api_keys table), models/apikey.py,
-  core/apikeys.py (generate/parse/hash pure functions, unit tests).
-  Apply migration on the live stack + verify via psql.
-2. Phase B: deps.py - Bearer path in get_current_user (parse id ->
-  fetch -> compare_digest -> active/expiry -> ApiKeyPrincipal),
-  read-only choke + keys-manage-keys choke at principal layer,
-  SessionUser alias; sweep routers per spec D4 list (auth/me,
-  logout, change-password, reviews queue/count/history/submit);
-  dashboard mixed payload + principal flag. FULL suite must stay
-  green (cookie-flow regression proof).
-3. Phase C: routers/apikeys.py (GET list, POST create 201 + key ONCE,
-  POST {id}/revoke idempotent; 409 dup name, 400 bad/past role+date),
-  audit entries in-TX, OpenAPI bearer scheme; frontend: client.ts
-  apiKeys namespace, ApiKeys.tsx view (table/prefix mono/role chip/
-  status derived/reveal-once modal/copy/revoke confirm), nav +
-  route, system_admin only. TSC 0 + vite build. [DONE 31eecff]
-4. Phase D: scripts/live_apikey_check.py on the stack (create via
-  cookie -> Bearer reads -> 403 writes -> 403 key-mgmt -> revoke ->
-  401 -> audit chain verify), HANDOFF update, commit. [DONE - LIVE
-  PASS, chain 144 entries; HANDOFF + commit this session]
-5. Each phase: pytest green + stack healthy + commit (msg-file
-  method for trailers) + TSC when frontend touched.
+1. Phase A: migration 0007 (risk_snapshots: run_id, identity FK
+  SET NULL + frozen employee_id, score/band/signals/factors JSON,
+  computed_at; indexes run_id + (identity_id, computed_at)),
+  models/risk.py, core/risk_engine.py pure signals (sod_engine
+  shape; settings kwarg gotcha - use env vars in tests), unit
+  tests for all 7 signals + weights-sum + clamp + bands.
+2. Phase B: routers/risk.py (POST /runs 202 one-TX persist+audit
+  risk_run_completed, GET /snapshots latest-run default + run_id/
+  band/department/page, GET /trend/{id}, GET /summary),
+  ReportViewer alias in deps.py (report_viewer/auditor/cert_admin/
+  system_admin), integration tests incl. guards + API-key reads.
+3. Phase C: SIEM feed in routers/audit.py - GET /feed JSONL
+  (after_id cursor, limit 500/max 5000, X-IAG-Last-Id + X-IAG-Head
+  headers) + GET /feed/stats; cursor-follows-id tests; auditor-key
+  200 / report_viewer-key 403; streaming (no full buffering).
+4. Phase D: campaign report backend (GET /api/campaigns/{id}/report
+  JSON incl. reviewer workload + revocations + risk block;
+  report.csv streamed) + frontend (Risk view, /campaigns/:id/report
+  print CSS + window.print, client risk/report namespaces, nav);
+  TSC 0 + vite build (output = backend/static, image rebuild picks
+  it up).
+5. Phase E: scripts/live_risk_check.py + live_report_check.py +
+  live_siem_check.py (walk feed pages = audit CSV export three-way
+  consistency; client-side chain recompute; NO tamper on live DB);
+  run on REBUILT stack (build every service + force-recreate all 3
+  app replicas - round-robin stale-image lesson); HANDOFF, commit.
+6. Each phase: pytest green + stack healthy + commit (msg-file
+  method w/ trailer) + TSC when frontend touched.
 
 ### Context-window protocol (applies to every build session)
 
@@ -710,7 +741,7 @@ for every write (AST-check python, junk-grep, CRLF-normalize).
   build/compose logs tailed, never streamed; targeted Select-String
   over full-file reads; never re-verify what this session already
   proved [V] - the label carries.
-- Startup reading budget: this file + SPECS/feature-4-api-keys.md
+- Startup reading budget: this file + SPECS/feature-5-risk-reports-siem.md
   fully; REQUIREMENTS/ARCHITECTURE only on demand (the spec encodes
   the build). Do not cat whole source files unmodified this session.
 - Early-warning self-check: re-reading the same file twice, losing
@@ -720,12 +751,10 @@ for every write (AST-check python, junk-grep, CRLF-normalize).
 ## User's exact words for the new chat
 
 "Continue the IAG rebuild at D:\Projects\iag - read
-HANDOFF.md first. Feature 4 (API keys) is COMPLETE through Phase D
-(commits b9c499f, 53415f9, 31eecff; 139/139; live proof PASS,
-chain 144 entries). Feature 5 (risk/PDF/SIEM) needs its spec
-drafted next: read REQUIREMENTS.md + prior spec pattern, draft
-SPECS/feature-5-risk-reports-siem.md with open decisions for
-ratification, commit the draft, and stop for my review."
+HANDOFF.md first. Feature 5 (risk/PDF/SIEM) spec is RATIFIED
+(D1-D8 as drafted, recorded in the spec header + ARCHITECTURE
+design slots). Build Phases A+B in this chat and stop at the
+phase boundary per the context-window protocol."
 
 ## USER DECISIONS RATIFIED (2026-08-20, session 8)
 

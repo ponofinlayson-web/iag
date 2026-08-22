@@ -91,24 +91,52 @@ backend/tests/test_audit_tamper.py ‚Äî raw-SQL mutation must break chain
 backend/pyproject.toml ‚Äî deps + pytest config (pythonpath=["."])
 uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
-## Unverified / in-flight
+## Current status
 
-FEATURE 6 (SCIM + enforcement) spec RATIFIED (session 16: D1
-bundle; D2/D4-D8 as drafted; D3 amended - schema alignment at
-value level, per-source connector_config invariant, end-user docs
-as Phase C deliverable). Spec: SPECS/feature-6-scim-provisioning-
-enforcement.md (7b2eb46 + 3b8ed38 + this session's ratification
-commit). ARCHITECTURE.md design-slots line added. pytest 172/172
-re-run at ratification [V]. Phases A-E unlocked; ZERO feature-6
-code exists yet. Feature 5 COMPLETE (sessions 12-14). Arc: 5/6
-landed; feature 6 is the LAST feature. Docker daemon relaunched
-this session after last close's crash-loop death - server 29.7.2
-up at session end [V]; budget a daemon death around any long
-build (session-14 lesson). NEXT (fresh chat): Phase A - migration
-0008 (scim_settings + remediation_rules.target, inspector-guarded
-0004 pattern) + models + app/core/scim.py pure helpers + unit
-tests; green gate; commit.
+FEATURE 6 Phase A COMPLETE (session 17, d529760). Spec
+RATIFIED (session 16) at SPECS/feature-6-scim-provisioning-
+enforcement.md. Built this phase: models/scim.py (ScimSettings
+single-row, SHA-256 token_hash at rest, enabled=false default);
+models/remediation.py (ENFORCE action + ENFORCE_TARGETS + rule
+target String(20) nullable, null=remove_entitlement); alembic
+0008 (scim_settings owned table + guarded rules.target, 0004
+inspector pattern); core/scim.py pure helpers (honest SPC,
+EQ-only fullmatch filter parser, Identity<->SCIM mapping,
+replace-only PATCH incl. Okta path-less shape, ScimError
+envelope); tests/test_scim_core.py (36 tests). Suite 208/208
+[V]. Migration 0008 APPLIED LIVE [V]: alembic_version=0008,
+row (1, {"enabled": false}, null token), target column varchar
+nullable - verified via psql, NOT container logs. NOTE:
+iag-migrate image rebuilt this session; app replicas still on
+the pre-feature-6 image (Phase A adds no runtime surface;
+Phase B router rides the next rebuild). Docker daemon healthy
+throughout (no crash this session). NEXT (fresh chat): Phase B
+per spec build phases - SCIM protocol router (routers/scim.py,
+prefix /api/scim/v2) + require_scim_token dependency (Bearer
+only, constant-time, 503/401 SCIM envelopes) + integration
+tests; green gate; commit; then rebuild app replicas so the
+surface exists at nginx.
 ## Session log (newest first)
+
+### 2026-08-22 (session 17): FEATURE 6 PHASE A (models + 0008 + core helpers)
+
+- Commit d529760. Suite 208/208 (172 + 36 new) [V]. Stack
+  healthy all session; daemon 29.7.2, no crash-loop.
+- LIVE 0008 [V]: first run FAILED (NotNullViolation - raw
+  op.execute INSERT bypasses ORM defaults; remediation_settings
+  never hit this because it has no timestamp column). Fix: bind
+  updated_at explicitly in the INSERT (naive-UTC). Postgres DDL
+  transactional -> clean rollback, second run clean. LESSON:
+  single-row settings migrations with NOT NULL timestamps must
+  bind them in the seed INSERT; 0005 pattern is insufficient
+  verbatim.
+- Junk-gate hits on "placeholder" were all intentional v1-defect
+  references in docstrings/tests - gate is heuristic, read the
+  lines before "fixing".
+- test double _Identity (attr-bag) keeps mapping tests DB-free;
+  one round-trip test exercises ScimSettings + rule.target
+  against real SQLite create_all (current metadata, so target
+  column present - matching the guard's fresh-volume path).
 
 ### 2026-08-22 (session 16): FEATURE 6 RATIFIED - PHASES A-E UNLOCKED
 

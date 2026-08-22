@@ -93,24 +93,55 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Feature 5 (risk/reports/SIEM) Phases A+B+C+D BUILT (sessions 12-13).
-A = 980acb7, B = ac6da0a (session 12); C = 1af1d8a, D = 9dec9bb
-(session 13). Suite 171/171; TSC 0; vite build landed in
-backend/static. App replicas STILL run the PRE-feature-5 image -
-Phase E must rebuild every service + force-recreate all 3 replicas
-(round-robin stale-image lesson) BEFORE live proofs. Migration 0007
-applied live [V] (session 12). REMAINING: Phase E only (three
-live-check scripts + run on rebuilt stack + HANDOFF/commit).
-ENVIRONMENT (session 13): Docker Desktop was fully dead at session
-start (post-crash-loop); Start-Process brought it back and the whole
-stack self-recovered via restart policies [V] - no manual compose up
-needed. If dead again: restart Docker Desktop, wait, verify
-`docker ps` shows all iag-* healthy; only then `docker compose up
--d`. NEXT (fresh chat): Phase E, then feature-6 spec draft.
-Exact words staged in User's-exact-words section below.
-Feature 4 COMPLETE (session 10): 139/139 then, live proof PASS.
-Arc: 4/6 landed. Feature 6 (SCIM-class) needs its spec after 5.
+FEATURE 5 COMPLETE (sessions 12-14). Phases A-E all landed: A = 980acb7,
+B = ac6da0a (session 12); C = 1af1d8a, D = 9dec9bb (session 13); E =
+8391746 (session 14: three live proofs ALL PASS on rebuilt stack, plus
+trend id-order fix + clock-step regression). Suite 172/172; TSC 0;
+fresh images on all 3 replicas [V]; alembic 0007 live [V]. Stack
+healthy at close. Feature 4 COMPLETE (session 10). Arc: 5/6 landed.
+NEXT (fresh chat): feature-6 spec draft (SCIM-class) - spec required
+before code, per arc rule; pattern per feature-4/5 specs. Exact words
+staged in User's-exact-words section below.
 ## Session log (newest first)
+
+### 2026-08-22 (session 14): FEATURE 5 PHASE E - FEATURE COMPLETE
+
+- Three live-check scripts written + gated (new scripts/
+  verify_script_gate.py: py_compile + junk grep + delimiter balance
+  after every write - corruption mode stayed silent this session).
+- Stack rebuilt (docker compose up -d --build); Docker daemon died
+  seconds after the first build finished (the known crash-loop);
+  Start-Process relaunch + restart policies brought everything back
+  healthy [V]; fresh image digests verified on all 3 replicas.
+- Proofs (order risk -> report -> siem, each seeds unique-tag data):
+  LIVE RISK CHECK PASS - deterministic risky identity (5 very_high
+  accounts over 4 entitlements, 3 SoD rules, no manager) scores
+  exactly 82.5 critical by hand-computed engine math; clean identity
+  0.0; two runs; summary/snapshots/trend/band-filter asserts.
+  LIVE REPORT CHECK PASS - campaign with 1 approve + 1 revoke-with-
+  comment + 1 pending; report JSON shape (completion/decisions/
+  workload/revocation detail/risk block); report.csv == metrics
+  decisions; SPA shell served at /campaigns/:id/report.
+  LIVE SIEM CHECK PASS - 209 entries walked in 9 pages with
+  catch-up-to-head loop; CLIENT-SIDE chain recompute over the whole
+  feed (re-canonicalize details, ts + "+00:00"); three-way
+  consistency feed == CSV export == server verify (heads equal);
+  report_viewer key 403 on feed; revoked key 401.
+- REAL BUG FOUND + FIXED by the live proof: /api/risk/trend/{id}
+  ordered by computed_at; a Docker-VM clock step stamped the LATER
+  run ~44ms EARLIER (live capture: run2 .840 < run1 .884), inverting
+  history. Fixed to order by id (ids monotonic per run TX);
+  regression test test_trend_survives_clock_step. Suite 171 -> 172.
+- Script gotchas hit: (1) list filter param is `q`, NOT `search`
+  (identities + entitlements) - wrong param silently returns ALL
+  rows; (2) source_owner campaigns SKIP accounts whose source has no
+  owner-with-login at start (no creator fallback in that mode - only
+  manager mode falls back) - proof sources must set
+  owner_employee_id=E-ADMIN; (3) bulk-link matches exact username
+  only - suffixed accounts need per-account PUT link.
+- Residue on live DB (expected, per house convention): seeded
+  risk/report data, campaign 5 staged-but-empty (first report-check
+  attempt), 2 revoked probe keys, snapshot history for 3+ runs.
 
 ### 2026-08-21 late (session 13): FEATURE 5 PHASES C+D
 
@@ -782,11 +813,13 @@ dup-line check; writes under ~120 lines).
   print CSS + window.print, client risk/report namespaces, nav);
   TSC 0 + vite build (output = backend/static, image rebuild picks
   it up).
-5. Phase E: scripts/live_risk_check.py + live_report_check.py +
+5. Phase E [DONE 8391746]: scripts/live_risk_check.py + live_report_check.py +
   live_siem_check.py (walk feed pages = audit CSV export three-way
   consistency; client-side chain recompute; NO tamper on live DB);
   run on REBUILT stack (build every service + force-recreate all 3
   app replicas - round-robin stale-image lesson); HANDOFF, commit.
+  Live proof also surfaced + fixed trend ordering (id not
+  computed_at; clock-step regression test added).
 6. Each phase: pytest green + stack healthy + commit (msg-file
   method w/ trailer) + TSC when frontend touched.
 
@@ -816,15 +849,14 @@ dup-line check; writes under ~120 lines).
 ## User's exact words for the new chat
 
 "Continue the IAG rebuild at D:\Projects\iag - read
-HANDOFF.md first. Feature 5 (risk/PDF/SIEM): Phases A-D are
-DONE and committed (980acb7, ac6da0a, 1af1d8a, 9dec9bb; suite
-171/171, migration 0007 already applied live, app replicas
-still on the pre-feature-5 image). Run Phase E in this chat:
-write the three live-check scripts (live_risk_check,
-live_report_check, live_siem_check), rebuild the whole stack
-(all services + force-recreate all 3 app replicas), run all
-three proofs on the live Postgres, then close the feature in
-HANDOFF + memory and stop at the boundary."
+HANDOFF.md first. Feature 5 (risk/PDF/SIEM) is now COMPLETE
+(A-E: 980acb7, ac6da0a, 1af1d8a, 9dec9bb, 8391746; suite
+172/172, all three live proofs PASS on the rebuilt stack).
+Arc is 5/6. In this chat: draft the feature-6 spec
+(SCIM-class provisioning/enforcement - the last feature) in
+SPECS/ following the feature-4/5 spec pattern, with open
+decisions D1-Dn for ratification. Commit the draft and STOP
+for my ratification - no code before ratification."
 
 ## USER DECISIONS RATIFIED (2026-08-21 late, session 12)
 

@@ -93,30 +93,73 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Current status
 
-FEATURE 6 Phase A COMPLETE (session 17, d529760). Spec
-RATIFIED (session 16) at SPECS/feature-6-scim-provisioning-
-enforcement.md. Built this phase: models/scim.py (ScimSettings
-single-row, SHA-256 token_hash at rest, enabled=false default);
-models/remediation.py (ENFORCE action + ENFORCE_TARGETS + rule
-target String(20) nullable, null=remove_entitlement); alembic
-0008 (scim_settings owned table + guarded rules.target, 0004
-inspector pattern); core/scim.py pure helpers (honest SPC,
-EQ-only fullmatch filter parser, Identity<->SCIM mapping,
-replace-only PATCH incl. Okta path-less shape, ScimError
-envelope); tests/test_scim_core.py (36 tests). Suite 208/208
-[V]. Migration 0008 APPLIED LIVE [V]: alembic_version=0008,
-row (1, {"enabled": false}, null token), target column varchar
-nullable - verified via psql, NOT container logs. NOTE:
-iag-migrate image rebuilt this session; app replicas still on
-the pre-feature-6 image (Phase A adds no runtime surface;
-Phase B router rides the next rebuild). Docker daemon healthy
-throughout (no crash this session). NEXT (fresh chat): Phase B
-per spec build phases - SCIM protocol router (routers/scim.py,
-prefix /api/scim/v2) + require_scim_token dependency (Bearer
-only, constant-time, 503/401 SCIM envelopes) + integration
-tests; green gate; commit; then rebuild app replicas so the
-surface exists at nginx.
+FEATURE 6 Phase B COMPLETE (session 18, c1bbfb9 +
+5438605). Spec ratified (session 16), Phase A done (session 17,
+d529760). Built this phase: routers/scim.py (prefix /api/scim/v2,
+router-level require_scim_token: Bearer-only constant-time compare,
+503 while disabled/tokenless, 401 + WWW-Authenticate otherwise;
+ServiceProviderConfig + Users list with EQ filter on userName/
+emails.value/externalId, 1-based paging, count clamp 200; create
+with externalId->employee_id and 409 dup answers; PUT with
+externalId-mismatch 400; PATCH replace-only both Okta shapes; DELETE
+soft + idempotent, retries audited; audit actor_username=scim
+same-TX on every write); main.py (ScimError envelope handler +
+SCIM-scoped 422->400, other paths byte-identical FastAPI default);
+tests/test_scim_api.py (24 integration tests). REAL BUG fixed while
+composing: normalize_patch emitted flat dotted name keys that
+scim_to_identity_fields could not read - name-only PATCH silently
+no-opped; now folds into nested name dict + regression test. Suite
+233/233 [V]. LIVE smoke PASS (scripts/live_scim_smoke.py, 10 legs,
+real PG through nginx: 503 disabled, psql-seeded token, 401 bad
+bearer, create/PATCH/DELETE, externalId filter, chain valid + scim
+actor in feed, disabled restored). ALL 3 replicas rebuilt on the
+Phase B image [V] (app-2/3 need their OWN builds - compose anchor
+gives each service its own image tag). Docker daemon dead at open,
+relaunched, healthy since. NEXT (fresh chat): Phase C per spec -
+management endpoints (GET/PUT /api/scim/config, POST/DELETE
+/api/scim/token, session-auth AdminUser, audit scim_config_updated/
+scim_token_rotated/scim_token_revoked) + frontend (settings panel
+reveal-once token modal, rules form enforce->target select, queue
+chips) + client.ts scim namespace + docs/admin-guide.md (ratified
+deliverable) + TSC gate.
 ## Session log (newest first)
+### 2026-08-22 (session 18): FEATURE 6 PHASE B (SCIM router + token dependency)
+
+- Commits c1bbfb9 (router + dependency + 24 integration tests +
+  normalize_patch composition fix) + 5438605 (live smoke script).
+  Suite 233/233 [V]. All 3 replicas rebuilt on Phase B image [V].
+- LIVE smoke PASS [V] (scripts/live_scim_smoke.py, 10 legs): 503
+  disabled envelope; psql-seeded token (sha256) + enabled=true ->
+  list 200; bad bearer 401; create 201 id=externalId; PATCH Okta
+  shape active=false; DELETE 204; externalId filter; chain valid +
+  scim actor in feed; disabled restored. Script resets the settings
+  row FIRST (prior failed run leaves enabled=true + stale hash -
+  idempotent re-run rule).
+- REAL BUG (phase-A gap): normalize_patch emitted flat "name.givenName"
+  keys; scim_to_identity_fields reads only nested name dicts - a
+  name-only PATCH silently no-opped. The phase-A round-trip test
+  passed only because displayName "A B" parsed to the same values the
+  dotted paths were supposed to set. Fixed: fold dotted paths into
+  nested name dict; regression test pins composition.
+- GOTCHA: exception HANDLERS must return, never raise - a raise
+  inside a handler escapes to ServerErrorMiddleware (plain 500), it
+  does not re-enter the app's handlers.
+- GOTCHA: feed/stats key is total_entries (not entries).
+- GOTCHA: urllib filter URLs need quote() (spaces = control-char
+  InvalidURL).
+- GOTCHA: verify_script_gate apostrophe false positive - a possessive
+  in a comment (token's) makes the string-stripper regex eat code;
+  reword the comment, do not chase a phantom imbalance.
+- GOTCHA: compose anchor gives app-2/3 their OWN image tags - build
+  each service (or all three) explicitly; --force-recreate alone
+  recreates from STALE per-service images (verified: scim.py
+  missing in 2/3 until individually built).
+- ENV: daemon dead at session open (crash-loop pattern continues);
+  Start-Process relaunch + ~10s wait; healthy since (no crash
+  during this session's builds).
+- NEXT (fresh chat): Phase C per staged words in Current status.
+
+
 
 ### 2026-08-22 (session 17): FEATURE 6 PHASE A (models + 0008 + core helpers)
 
@@ -961,13 +1004,18 @@ dup-line check; writes under ~120 lines).
 
 "Continue the IAG rebuild at D:\Projects\iag - read
 HANDOFF.md first. Feature 6 (SCIM + enforcement) spec is RATIFIED
-(session 16 - SPECS/feature-6-scim-provisioning-enforcement.md,
-D1-D8 ruled; D3 carries the schema-alignment amendment + Phase C
-end-user-docs deliverable). In this chat: build Phase A only
-(migration 0008 + models + core/scim.py pure helpers + unit
-tests), green-gate it, commit, and stop at the phase boundary.
-Docker daemon was up at last close (29.7.2) - verify before
-build."
+(session 16; phases A-B DONE: A=d529760, B=c1bbfb9+5438605,
+suite 233/233, live smoke PASS, all replicas on the Phase B
+image). In this chat: build Phase C only - management endpoints
+(GET/PUT /api/scim/config, POST/DELETE /api/scim/token,
+session-auth AdminUser, audits scim_config_updated/
+scim_token_rotated/scim_token_revoked) + frontend (settings
+panel reveal-once token modal per ApiKeys.tsx pattern, rules
+form enforce->target select + target column, queue chips +
+Sync-now link) + client.ts scim namespace + docs/admin-guide.md
+(ratified D3 deliverable, plain-English task-shaped) + TSC
+gate; green-gate, commit, and stop at the phase boundary.
+Docker daemon was healthy at last close - verify before build."
 
 ## USER DECISIONS RATIFIED (2026-08-22, session 16)
 

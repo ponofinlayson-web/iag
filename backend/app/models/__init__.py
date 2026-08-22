@@ -13,9 +13,11 @@ from app.models.remediation import (
     RemediationSettings,
 )
 from app.models.apikey import ApiKey
+from app.models.risk import RiskSnapshot
 
 __all__ = [
     "Identity", "User", "DataSource", "Account", "Entitlement", "Campaign", "Review",
     "AuditEntry", "SodRule", "EmailOutbox", "SyncRun",
     "RemediationRule", "RemediationAction", "RemediationSettings", "ApiKey",
+    "RiskSnapshot",
 ]

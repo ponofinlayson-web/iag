@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     remediation_webhook_timeout_seconds: int = Field(
         default=10, alias="IAG_REMEDIATION_WEBHOOK_TIMEOUT_SECONDS"
     )
+    risk_unreviewed_days: int = Field(default=90, alias="IAG_RISK_UNREVIEWED_DAYS")
     def db_url_sync(self) -> str:
         """Sync driver URL for Alembic and tests."""
         if self.database_url.startswith("sqlite+aiosqlite"):

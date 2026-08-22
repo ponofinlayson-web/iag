@@ -138,6 +138,18 @@ async def _deliver_webhook(db, action: RemediationAction, settings) -> str:
     return f"webhook {resp.status_code} from {url[:120]}"
 
 
+async def _deliver_unsupported(db, action: RemediationAction, settings) -> str:
+    raise RuntimeError(
+        f"action_type '{action.action_type}' has no delivery arm in this build"
+    )
+
+
+_DELIVERERS = {
+    "notify_owner": _deliver_notify_owner,
+    "webhook": _deliver_webhook,
+}
+
+
 async def _claim_due(session: AsyncSession, settings, now) -> list[RemediationAction]:
     """Claim TX: approved (or stuck executing) rows -> executing,
     attempts+1, one commit. SKIP LOCKED for multi-replica safety."""
@@ -224,10 +236,13 @@ async def run_pass(session_factory, settings=None, deliver_overrides=None) -> di
         result = None
         deliver = overrides.get(row.action_type)
         if deliver is None:
-            deliver = (
-                _deliver_notify_owner if row.action_type == "notify_owner"
-                else _deliver_webhook
-            )
+            deliver = _DELIVERERS.get(row.action_type)
+        if deliver is None:
+            # Unknown action type must fail LOUD with its own name, not
+            # fall into the webhook arm's misleading "no webhook_url"
+            # (phase-C window: enforce actions await phase-D's arm; a
+            # raw mis-seeded type says so honestly).
+            deliver = _deliver_unsupported
         try:
             async with session_factory() as session:
                 result = await deliver(session, row, settings)

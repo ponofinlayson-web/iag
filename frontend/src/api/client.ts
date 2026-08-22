@@ -205,6 +205,7 @@ export interface RemediationRule {
   privilege_level: string | null;
   entitlement_pattern: string | null;
   action: string;
+  target: string | null;
   webhook_url: string | null;
   is_active: boolean;
   require_approval: boolean;
@@ -221,9 +222,10 @@ export interface RemediationRuleInput {
   privilege_level?: string | null;
   entitlement_pattern?: string | null;
   action?: string;
+  target?: string | null;
   webhook_url?: string | null;
   is_active?: boolean;
-  require_approval?: boolean;
+  require_approval?: boolean | null;
 }
 
 export interface RemediationAction {
@@ -244,14 +246,27 @@ export interface RemediationAction {
   snapshot: {
     campaign_id?: number;
     campaign_name?: string;
+    data_source_id?: number;
     data_source_name?: string;
     account_value?: string;
     account_type?: string;
     privilege_level?: string;
     entitlement_name?: string;
     identity_name?: string;
+    target?: string;
     [key: string]: unknown;
   };
+}
+
+export interface ScimConfig {
+  enabled: boolean;
+  token_prefix: string | null;
+  token_created_at: string | null;
+}
+
+export interface ScimTokenCreated {
+  token: string;
+  token_prefix: string;
 }
 
 export interface RemediationSettings {
@@ -677,6 +692,20 @@ export const api = {
     revoke: (id: number) =>
       request<{ ok: boolean; already_revoked: boolean }>(`/api/api-keys/${id}/revoke`, {
         method: "POST",
+      }),
+  },
+  scim: {
+    getConfig: () => request<ScimConfig>("/api/scim/config"),
+    updateConfig: (enabled: boolean) =>
+      request<ScimConfig>("/api/scim/config", {
+        method: "PUT",
+        body: JSON.stringify({ enabled }),
+      }),
+    createToken: () =>
+      request<ScimTokenCreated>("/api/scim/token", { method: "POST" }),
+    revokeToken: () =>
+      request<{ ok: boolean; already_revoked: boolean }>("/api/scim/token", {
+        method: "DELETE",
       }),
   },
 };

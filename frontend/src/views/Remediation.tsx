@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import type { RemediationAction, RemediationRule, RemediationSettings } from "../api/client";
+import type {
+  RemediationAction,
+  RemediationRule,
+  RemediationSettings,
+  ScimConfig,
+} from "../api/client";
+import { useAuth } from "../auth";
 import { Badge, Card, Empty, errMsg } from "../components/ui";
 
 const PRIVILEGES = ["low", "moderate", "high", "very_high"];
 const STATUSES = ["pending_approval", "approved", "executing", "completed", "failed", "cancelled"];
+const ENFORCE_TARGETS = ["remove_entitlement", "disable_account"];
 
 function statusTone(status: string): "ok" | "warn" | "bad" | "neutral" {
   switch (status) {
@@ -16,7 +23,14 @@ function statusTone(status: string): "ok" | "warn" | "bad" | "neutral" {
   }
 }
 
+function toUtc(s: string): Date {
+  // Backend dates are naive-UTC isoformat; display math must not read local.
+  return new Date(s.endsWith("Z") ? s : s + "Z");
+}
+
 export default function Remediation() {
+  const { me } = useAuth();
+  const isSystemAdmin = me?.role === "system_admin";
   const [rules, setRules] = useState<RemediationRule[] | null>(null);
   const [actions, setActions] = useState<RemediationAction[] | null>(null);
   const [settings, setSettings] = useState<RemediationSettings | null>(null);
@@ -24,9 +38,17 @@ export default function Remediation() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  // scim settings panel (system_admin)
+  const [scim, setScim] = useState<ScimConfig | null>(null);
+  const [scimToken, setScimToken] = useState<string | null>(null);
+  const [scimCopied, setScimCopied] = useState(false);
+  const [confirmScimRevoke, setConfirmScimRevoke] = useState(false);
+  const [syncingSource, setSyncingSource] = useState<number | null>(null);
+
   // rule form
   const [name, setName] = useState("");
   const [action, setAction] = useState("notify_owner");
+  const [target, setTarget] = useState("remove_entitlement");
   const [webhookUrl, setWebhookUrl] = useState("");
   const [pattern, setPattern] = useState("");
   const [privilege, setPrivilege] = useState("");
@@ -42,8 +64,15 @@ export default function Remediation() {
     api.remediation.settings().then(setSettings).catch((e) => setError(e.message));
   }
 
+  function loadScim() {
+    if (isSystemAdmin) {
+      api.scim.getConfig().then(setScim).catch(() => setScim(null));
+    }
+  }
+
   useEffect(load, []);
   useEffect(load, [statusFilter]);
+  useEffect(loadScim, [isSystemAdmin]);
 
   useEffect(() => {
     if (!pattern) {
@@ -65,10 +94,12 @@ export default function Remediation() {
       await api.remediation.createRule({
         name,
         action,
+        target: action === "enforce" ? target : null,
         webhook_url: action === "webhook" ? webhookUrl : null,
         entitlement_pattern: pattern || null,
         privilege_level: privilege || null,
-        require_approval: requireApproval,
+        // undefined = let the backend apply its defaults (enforce => ON)
+        require_approval: action === "enforce" ? requireApproval || undefined : requireApproval,
       });
       setNotice(`Rule "${name}" created`);
       setName("");
@@ -76,6 +107,7 @@ export default function Remediation() {
       setPattern("");
       setPrivilege("");
       setRequireApproval(false);
+      setTarget("remove_entitlement");
       load();
     } catch (e) {
       setError(errMsg(e));
@@ -92,8 +124,10 @@ export default function Remediation() {
         privilege_level: rule.privilege_level,
         entitlement_pattern: rule.entitlement_pattern,
         action: rule.action,
+        target: rule.target,
         webhook_url: rule.webhook_url,
         is_active: !rule.is_active,
+        // the stored value IS explicit here - round-trip it unchanged
         require_approval: rule.require_approval,
       });
       load();
@@ -146,6 +180,63 @@ export default function Remediation() {
     }
   }
 
+  async function toggleScim(enabled: boolean) {
+    setError("");
+    try {
+      const r = await api.scim.updateConfig(enabled);
+      setScim(r);
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
+
+  async function generateScimToken() {
+    setError("");
+    try {
+      const r = await api.scim.createToken();
+      setScimToken(r.token);
+      setScimCopied(false);
+      loadScim();
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
+
+  async function revokeScimToken() {
+    setError("");
+    setConfirmScimRevoke(false);
+    try {
+      await api.scim.revokeToken();
+      setNotice("SCIM token revoked - the provisioning surface is now closed");
+      loadScim();
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
+
+  function copyScimToken() {
+    if (!scimToken) return;
+    navigator.clipboard
+      .writeText(scimToken)
+      .then(() => setScimCopied(true))
+      .catch(() => setError("Clipboard unavailable - copy manually"));
+  }
+
+  async function syncNow(a: RemediationAction) {
+    const srcId = a.snapshot.data_source_id;
+    if (!srcId) return;
+    setError("");
+    setSyncingSource(srcId);
+    try {
+      const r = await api.sources.syncNow(srcId);
+      setNotice(`Sync #${r.run_id} started for ${a.snapshot.data_source_name ?? `source ${srcId}`}`);
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setSyncingSource(null);
+    }
+  }
+
   const canCreate = name.trim().length > 0 && regexOk && (action !== "webhook" || webhookUrl.trim().length > 0);
 
   return (
@@ -186,6 +277,62 @@ export default function Remediation() {
           </div>
         )}
       </Card>
+      {isSystemAdmin && (
+        <Card title="SCIM provisioning">
+          {scim === null ? (
+            <p className="muted">Loading…</p>
+          ) : (
+            <div className="row" style={{ flexWrap: "wrap", gap: 16, alignItems: "center" }}>
+              <label className="row" style={{ gap: 6 }}>
+                <input
+                  type="checkbox"
+                  checked={scim.enabled}
+                  onChange={(e) => void toggleScim(e.target.checked)}
+                />
+                Enabled
+              </label>
+              <span className="muted">
+                Token:{" "}
+                {scim.token_prefix ? (
+                  <>
+                    <code>{scim.token_prefix}…</code>{" "}
+                    created {toUtc(scim.token_created_at!).toLocaleString()}
+                  </>
+                ) : (
+                  "none (surface answers 503 until one is generated)"
+                )}
+              </span>
+              <span className="row" style={{ gap: 8 }}>
+                <button onClick={() => void generateScimToken()}>
+                  {scim.token_prefix ? "Rotate token" : "Generate token"}
+                </button>
+                {scim.token_prefix && !confirmScimRevoke && (
+                  <button className="secondary" onClick={() => setConfirmScimRevoke(true)}>
+                    Revoke
+                  </button>
+                )}
+                {confirmScimRevoke && (
+                  <>
+                    <button className="danger" onClick={() => void revokeScimToken()}>
+                      Confirm revoke
+                    </button>
+                    <button className="secondary" onClick={() => setConfirmScimRevoke(false)}>
+                      Cancel
+                    </button>
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+          <p className="muted" style={{ marginBottom: 0 }}>
+            The provisioning endpoint is <code>/api/scim/v2</code>. The token is shown once at
+            generation and stored hashed. Point your IdP at it with{" "}
+            <code>Authorization: Bearer …</code>. The join key is whatever your IdP sends as{" "}
+            <code>externalId</code> - pick a stable one (UPN or employee number), not a display
+            name. See docs/admin-guide.md.
+          </p>
+        </Card>
+      )}
       <Card title="New remediation rule">
         <p className="muted">
           Rules fire when a reviewer revokes access. All filters are ANDed; an empty filter matches all.
@@ -195,6 +342,7 @@ export default function Remediation() {
           <select value={action} onChange={(e) => setAction(e.target.value)}>
             <option value="notify_owner">notify_owner</option>
             <option value="webhook">webhook</option>
+            <option value="enforce">enforce</option>
           </select>
         </div>
         {action === "webhook" && (
@@ -204,6 +352,24 @@ export default function Remediation() {
             onChange={(e) => setWebhookUrl(e.target.value)}
             style={{ marginBottom: 8, width: "100%" }}
           />
+        )}
+        {action === "enforce" && (
+          <div style={{ marginBottom: 8 }}>
+            <div className="row">
+              <select value={target} onChange={(e) => setTarget(e.target.value)}>
+                {ENFORCE_TARGETS.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              <span className="muted">directory write-back target</span>
+            </div>
+            <p className="muted" style={{ marginBottom: 0 }}>
+              remove_entitlement needs the entitlement name to be the directory group name.
+              disable_account writes to the account attribute the connector matches on. SQL
+              sources need admin-supplied statements in the connector config. Enforcement
+              requires approval by default.
+            </p>
+          </div>
         )}
         <div className="row" style={{ marginBottom: 8 }}>
           <input
@@ -257,10 +423,13 @@ export default function Remediation() {
                       r.entitlement_pattern,
                     ].filter(Boolean).join(" · ") || "catch-all"}
                   </td>
- <td>
+                   <td>
                     {r.action}
                     {r.action === "webhook" && r.webhook_url && (
                       <span className="muted"> → {r.webhook_url.slice(0, 40)}</span>
+                    )}
+                    {r.action === "enforce" && (
+                      <span className="muted"> → {r.target ?? "remove_entitlement"}</span>
                     )}
                   </td>
                   <td>{r.require_approval ? "required" : "—"}</td>
@@ -311,8 +480,19 @@ export default function Remediation() {
                 <tr key={a.id}>
                   <td>{a.id}</td>
                   <td><Badge tone={statusTone(a.status)}>{a.status}</Badge></td>
-                  <td>{a.action_type}</td>
                   <td>
+                    {a.action_type === "enforce" ? (
+                      <Badge tone="warn">enforce</Badge>
+                    ) : (
+                      a.action_type
+                    )}
+                  </td>
+                  <td>
+                    {a.action_type === "enforce" && (
+                      <div className="muted" style={{ marginBottom: 2 }}>
+                        target: {a.snapshot.target ?? "remove_entitlement"}
+                      </div>
+                    )}
                     {a.snapshot.entitlement_name ?? "?"} → {a.snapshot.identity_name ?? "?"}
                     <span className="muted"> ({a.snapshot.account_value ?? "?"})</span>
                   </td>
@@ -332,6 +512,20 @@ export default function Remediation() {
                     {a.status === "failed" && (
                       <button onClick={() => void retry(a)}>Retry</button>
                     )}
+                    {a.action_type === "enforce" && a.status === "completed" && (
+                      <button
+                        className="secondary"
+                        disabled={!a.snapshot.data_source_id || syncingSource !== null}
+                        title={
+                          a.snapshot.data_source_id
+                            ? "Mirror updates at the next sync - run it now to close the drift window"
+                            : "Source unknown - sync from the Sources page"
+                        }
+                        onClick={() => void syncNow(a)}
+                      >
+                        {syncingSource !== null ? "Syncing…" : "Sync now"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -339,6 +533,27 @@ export default function Remediation() {
           </table>
         )}
       </Card>
+      {scimToken && (
+        <div className="modal-overlay" onClick={() => setScimToken(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Copy your SCIM token now</h3>
+            <p className="muted">
+              This is the only time the full token is shown. It is stored hashed and cannot be
+              recovered. Rotating replaces it (the old token stops working immediately). The
+              join key for provisioned users is whatever your IdP sends as{" "}
+              <code>externalId</code> - pick a stable one (UPN or employee number), not a
+              display name.
+            </p>
+            <p className="mono key-box">{scimToken}</p>
+            <div className="actions">
+              <button onClick={copyScimToken}>{scimCopied ? "Copied ✓" : "Copy"}</button>
+              <button className="secondary" onClick={() => setScimToken(null)}>
+                I stored it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

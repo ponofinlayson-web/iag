@@ -19,6 +19,7 @@ from app.core.remediation_trigger import get_remediation_config
 from app.models.identity import utcnow
 from app.models.remediation import (
     DEFAULT_CONFIG,
+    ENFORCE_TARGETS,
     RemediationAction,
     RemediationRule,
     RemediationSettings,
@@ -28,7 +29,10 @@ from app.routers.deps import AdminUser, AnyUser, CertAdminUser, DbSession
 
 router = APIRouter(prefix="/api/remediation", tags=["remediation"])
 
-ACTIONS = {"notify_owner", "webhook"}
+ACTIONS = {"notify_owner", "webhook", "enforce"}
+# default_action may NEVER be enforce (feature-6: enforcement is a matching
+# rule's deliberate act, never the fallback - spec non-goals).
+DEFAULT_ACTIONS = {"notify_owner", "webhook"}
 PRIVILEGES = {"low", "moderate", "high", "very_high"}
 
 
@@ -39,9 +43,13 @@ class RuleIn(BaseModel):
     privilege_level: str | None = None
     entitlement_pattern: str | None = Field(default=None, max_length=255)
     action: str = "notify_owner"
+    target: str | None = None
     webhook_url: str | None = None
     is_active: bool = True
-    require_approval: bool = False
+    # None = unset: enforce rules default ON (D6 - human sign-off before
+    # writing to a production directory), others default off. An explicit
+    # false is the admin's documented opt-out.
+    require_approval: bool | None = None
 
 
 class SettingsIn(BaseModel):
@@ -56,9 +64,18 @@ class ActionUpdate(BaseModel):
 
 async def _validate_rule(db, body: RuleIn) -> None:
     if body.action not in ACTIONS:
-        raise HTTPException(400, "action must be notify_owner or webhook")
+        raise HTTPException(400, "action must be notify_owner, webhook, or enforce")
     if body.action == "webhook" and not (body.webhook_url or "").strip():
         raise HTTPException(400, "webhook action requires webhook_url")
+    if body.action == "enforce":
+        # webhook_url is webhook's field; a rule doing both is a config
+        # confusion, not a feature (spec rule surface).
+        if (body.webhook_url or "").strip():
+            raise HTTPException(400, "enforce rules take no webhook_url")
+        if body.target is not None and body.target not in ENFORCE_TARGETS:
+            raise HTTPException(
+                400, "target must be remove_entitlement or disable_account"
+            )
     if body.privilege_level is not None and body.privilege_level not in PRIVILEGES:
         raise HTTPException(400, "privilege_level must be low, moderate, high, very_high")
     if body.entitlement_pattern is not None:
@@ -82,6 +99,7 @@ def _rule_out(r: RemediationRule) -> dict:
         "privilege_level": r.privilege_level,
         "entitlement_pattern": r.entitlement_pattern,
         "action": r.action,
+        "target": r.target,
         "webhook_url": r.webhook_url,
         "is_active": r.is_active,
         "require_approval": r.require_approval,
@@ -106,6 +124,10 @@ async def create_rule(body: RuleIn, db: DbSession, user: CertAdminUser):
     if dup:
         raise HTTPException(409, "Rule name already exists")
     await _validate_rule(db, body)
+    require_approval = (
+        body.require_approval if body.require_approval is not None
+        else body.action == "enforce"
+    )
     r = RemediationRule(
         name=body.name,
         description=body.description,
@@ -113,16 +135,17 @@ async def create_rule(body: RuleIn, db: DbSession, user: CertAdminUser):
         privilege_level=body.privilege_level,
         entitlement_pattern=body.entitlement_pattern,
         action=body.action,
+        target=body.target if body.action == "enforce" else None,
         webhook_url=body.webhook_url,
         is_active=body.is_active,
-        require_approval=body.require_approval,
+        require_approval=require_approval,
     )
     db.add(r)
     await db.flush()
     await append_audit(db, actor_id=user.id, actor_username=user.identity.username or "",
                        action="remediation_rule_created", entity_type="remediation_rule",
                        entity_id=r.id,
-                       details={"name": r.name, "action": r.action})
+                       details={"name": r.name, "action": r.action, "target": r.target})
     await db.commit()
     return {"id": r.id, "name": r.name}
 
@@ -149,14 +172,19 @@ async def update_rule(rule_id: int, body: RuleIn, db: DbSession, user: CertAdmin
     r.privilege_level = body.privilege_level
     r.entitlement_pattern = body.entitlement_pattern
     r.action = body.action
+    r.target = body.target if body.action == "enforce" else None
     r.webhook_url = body.webhook_url
     r.is_active = body.is_active
-    r.require_approval = body.require_approval
+    r.require_approval = (
+        body.require_approval if body.require_approval is not None
+        else body.action == "enforce"
+    )
     await append_audit(db, actor_id=user.id, actor_username=user.identity.username or "",
                        action="remediation_rule_updated", entity_type="remediation_rule",
                        entity_id=rule_id,
                        details={"old": old,
                                 "new": {"name": r.name, "action": r.action,
+                                        "target": r.target,
                                         "active": r.is_active}})
     await db.commit()
     return {"ok": True}
@@ -287,7 +315,7 @@ async def get_settings_route(db: DbSession, user: AnyUser):
 
 @router.put("/settings")
 async def put_settings(body: SettingsIn, db: DbSession, user: AdminUser):
-    if body.default_action not in ACTIONS:
+    if body.default_action not in DEFAULT_ACTIONS:
         raise HTTPException(400, "default_action must be notify_owner or webhook")
     old = await get_remediation_config(db)
     row = await db.get(RemediationSettings, 1)

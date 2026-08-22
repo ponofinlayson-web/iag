@@ -6,14 +6,19 @@ an IdP polling a cold installation gets an explicit "not provisioned"
 instead of an auth puzzle. Every failure renders an RFC 7644 error
 envelope. Writes append one hash-chained audit entry (actor_username
 "scim") in the same transaction; reads never audit (house rule; v1's
-SCIMEvent read logging was noise). Management endpoints (config/token)
-are session-auth and land here in Phase C.
+SCIMEvent read logging was noise).
+
+The management surface (config/token, Phase C) is session-auth
+AdminUser on the same module: /api/scim/config + /api/scim/token. It
+never shares the bearer gate - admin session in, protocol token out.
 """
 from __future__ import annotations
 
+import json
+import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import func, or_, select
 
 from app.core.apikeys import hash_key, verify_key
@@ -29,8 +34,9 @@ from app.core.scim import (
     service_provider_config,
 )
 from app.db import get_db
-from app.models.identity import Identity
-from app.models.scim import ScimSettings
+from app.models.identity import Identity, utcnow
+from app.models.scim import DEFAULT_SCIM_CONFIG, ScimSettings
+from app.routers.deps import AdminUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
@@ -266,3 +272,104 @@ async def delete_user(scim_id: str, db: DbSession):
     await _audit_scim_write(db, ident, "scim_user_deprovisioned", "deprovision")
     await db.commit()
     return Response(status_code=204)
+
+
+# --- Management surface (Phase C): session-auth AdminUser, no bearer gate.
+
+SCIM_TOKEN_PREFIX = "iag_scim_"
+
+admin_router = APIRouter(prefix="/api/scim", tags=["scim"])
+
+
+async def _get_or_seed_settings(db: AsyncSession) -> tuple[ScimSettings, dict]:
+    """Row id=1 with create_all-style self-healing (0008 seeds it on
+    migrated volumes; test DBs and cold starts may not have it yet)."""
+    row = await db.get(ScimSettings, 1)
+    if row is None:
+        row = ScimSettings(id=1, config=json.dumps(DEFAULT_SCIM_CONFIG))
+        db.add(row)
+        await db.flush()
+    try:
+        config = json.loads(row.config)
+    except (TypeError, ValueError):
+        config = {}
+    merged = dict(DEFAULT_SCIM_CONFIG)
+    if isinstance(config, dict):
+        merged.update({k: v for k, v in config.items() if k in DEFAULT_SCIM_CONFIG})
+    return row, merged
+
+
+def _config_out(row: ScimSettings) -> dict:
+    """Never reads the hash back: display fields only (spec Part 3)."""
+    return {
+        "enabled": bool(row.config_dict().get("enabled")) if row else False,
+        "token_prefix": row.token_prefix,
+        "token_created_at": row.token_created_at.isoformat() if row and row.token_created_at else None,
+    }
+
+
+@admin_router.get("/config")
+async def get_scim_config(db: DbSession, user: AdminUser):
+    row, _ = await _get_or_seed_settings(db)
+    return _config_out(row)
+
+
+@admin_router.put("/config")
+async def put_scim_config(body: dict, db: DbSession, user: AdminUser):
+    if not isinstance(body, dict) or not isinstance(body.get("enabled"), bool):
+        raise HTTPException(400, "config body must be {\"enabled\": boolean}")
+    row, old = await _get_or_seed_settings(db)
+    new = dict(old)
+    new["enabled"] = body["enabled"]
+    row.config = json.dumps(new)
+    await db.flush()
+    await append_audit(
+        db, actor_id=user.id, actor_username=user.identity.username or "",
+        action="scim_config_updated", entity_type="scim_settings", entity_id=1,
+        details={"old": {"enabled": old.get("enabled")},
+                 "new": {"enabled": new["enabled"]}},
+    )
+    await db.commit()
+    return _config_out(row)
+
+
+@admin_router.post("/token", status_code=201)
+async def create_scim_token(db: DbSession, user: AdminUser):
+    """Generate or rotate the installation token. Full token returns
+    ONCE; SHA-256 + prefix + created_at persist; the old token dies at
+    the same commit (D4). First generation audits as scim_token_rotated
+    too - spec pins ONE action name; `rotated` in details says which."""
+    token = SCIM_TOKEN_PREFIX + secrets.token_urlsafe(32)
+    row, _ = await _get_or_seed_settings(db)
+    rotated = row.token_hash is not None
+    row.token_hash = hash_key(token)
+    row.token_prefix = token[:16]
+    row.token_created_at = utcnow()
+    await db.flush()
+    await append_audit(
+        db, actor_id=user.id, actor_username=user.identity.username or "",
+        action="scim_token_rotated",
+        entity_type="scim_settings", entity_id=1,
+        details={"token_prefix": row.token_prefix, "rotated": rotated},
+    )
+    await db.commit()
+    return {"token": token, "token_prefix": row.token_prefix}
+
+
+@admin_router.delete("/token")
+async def delete_scim_token(db: DbSession, user: AdminUser):
+    """Kill the token. Idempotent: no token -> still 200 with
+    already_revoked (the desired end state already holds)."""
+    row, _ = await _get_or_seed_settings(db)
+    had = row.token_hash is not None
+    row.token_hash = None
+    row.token_prefix = None
+    row.token_created_at = None
+    await db.flush()
+    await append_audit(
+        db, actor_id=user.id, actor_username=user.identity.username or "",
+        action="scim_token_revoked", entity_type="scim_settings", entity_id=1,
+        details={"had_token": had},
+    )
+    await db.commit()
+    return {"ok": True, "already_revoked": not had}

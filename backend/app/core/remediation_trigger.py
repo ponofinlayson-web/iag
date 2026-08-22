@@ -93,7 +93,7 @@ async def trigger_remediation(db, user, review: Review, account: Account) -> int
                     review_id=review.id,
                     rule_id=rule.id,
                     account_id=account.id,
-                    snapshot=await _snapshot(db, review, account, entitlement_name),
+                    snapshot=await _snapshot(db, review, account, entitlement_name, rule),
                     action_type=rule.action,
                     status=(
                         RemediationStatus.PENDING_APPROVAL
@@ -146,7 +146,8 @@ async def trigger_remediation(db, user, review: Review, account: Account) -> int
     return len(actions)
 
 
-async def _snapshot(db, review: Review, account: Account, ent_name: str | None) -> str:
+async def _snapshot(db, review: Review, account: Account, ent_name: str | None,
+                    rule: RemediationRule | None = None) -> str:
     source = await db.get(DataSource, account.data_source_id)
     identity = await db.get(Identity, account.identity_id) if account.identity_id else None
     identity_name = None
@@ -154,17 +155,24 @@ async def _snapshot(db, review: Review, account: Account, ent_name: str | None) 
         identity_name = f"{identity.first_name or ''} {identity.last_name or ''}".strip()
         if not identity_name:
             identity_name = identity.username or identity.email
-    return json.dumps({
+    snap = {
         "review_id": review.id,
         "campaign_id": review.campaign_id,
         "account_value": account.account_value,
         "account_type": account.account_type,
         "privilege_level": account.privilege_level,
         "entitlement_name": ent_name,
+        "data_source_id": account.data_source_id,
         "data_source_name": source.name if source else None,
         "identity_name": identity_name,
         "ts": _utc_iso(),
-    })
+    }
+    if rule is not None and rule.action == "enforce":
+        # feature-6: freeze the rule's target choice at trigger time (the
+        # action must not silently change meaning if the rule is edited
+        # before delivery). D's worker reads target from here.
+        snap["target"] = rule.target or "remove_entitlement"
+    return json.dumps(snap)
 
 
 def _utc_iso() -> str:

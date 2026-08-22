@@ -90,6 +90,7 @@ app.include_router(remediation.router)
 app.include_router(apikeys.router)
 app.include_router(risk.router)
 app.include_router(scim.router)
+app.include_router(scim.admin_router)
 
 
 @app.exception_handler(ScimError)

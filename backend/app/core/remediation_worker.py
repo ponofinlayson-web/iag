@@ -138,6 +138,41 @@ async def _deliver_webhook(db, action: RemediationAction, settings) -> str:
     return f"webhook {resp.status_code} from {url[:120]}"
 
 
+async def _deliver_enforce(db, action: RemediationAction, settings) -> str:
+    """Feature-6 D: write the revocation back to the account's source
+    directory. The frozen snapshot (data_source_id + target) is the seam;
+    target was pinned at trigger time so editing the rule later can never
+    silently change what an in-flight action does."""
+    import json
+
+    from app.core.enforcement import enforce_against_source
+
+    snapshot = action.snapshot_dict()
+    source_id = snapshot.get("data_source_id")
+    if not source_id:
+        raise RuntimeError("enforce action snapshot has no data_source_id")
+    source = await db.get(DataSource, source_id)
+    if source is None:
+        raise RuntimeError(
+            f"enforce action's source {source_id} no longer exists"
+        )
+    try:
+        config = json.loads(source.connector_config) if source.connector_config else {}
+    except (TypeError, ValueError):
+        config = {}
+    if not config:
+        raise RuntimeError(
+            f"source '{source.name}' has no connector config; enforcement "
+            "needs a configured ldap/entra/sql source"
+        )
+    target = snapshot.get("target") or "remove_entitlement"
+    result = await enforce_against_source(
+        source.source_type, config, source.connector_secret or "",
+        snapshot, target,
+    )
+    return f"target={target}; {result}"
+
+
 async def _deliver_unsupported(db, action: RemediationAction, settings) -> str:
     raise RuntimeError(
         f"action_type '{action.action_type}' has no delivery arm in this build"
@@ -147,6 +182,7 @@ async def _deliver_unsupported(db, action: RemediationAction, settings) -> str:
 _DELIVERERS = {
     "notify_owner": _deliver_notify_owner,
     "webhook": _deliver_webhook,
+    "enforce": _deliver_enforce,
 }
 
 
@@ -240,8 +276,7 @@ async def run_pass(session_factory, settings=None, deliver_overrides=None) -> di
         if deliver is None:
             # Unknown action type must fail LOUD with its own name, not
             # fall into the webhook arm's misleading "no webhook_url"
-            # (phase-C window: enforce actions await phase-D's arm; a
-            # raw mis-seeded type says so honestly).
+            # (a raw mis-seeded or future type says so honestly).
             deliver = _deliver_unsupported
         try:
             async with session_factory() as session:

@@ -314,7 +314,7 @@ def test_worker_unknown_action_type_fails_with_own_name(client, worker_session):
             await s.flush()
             s.add(RemediationAction(
                 review_id=review.id, rule_id=None, account_id=acct.id,
-                action_type="enforce",
+                action_type="carrier_pigeon",
                 snapshot=json.dumps({"account_value": "jdoe"}),
                 status=RemediationStatus.APPROVED,
             ))
@@ -335,7 +335,15 @@ def test_worker_unknown_action_type_fails_with_own_name(client, worker_session):
                 __import__("sqlalchemy").select(RemediationAction)
             )).scalars().first()
             # honest failure with its own action name, not the webhook arm's
-            assert "enforce" in row.result and "no delivery arm" in row.result
+            assert "carrier_pigeon" in row.result and "no delivery arm" in row.result
             assert "webhook_url" not in row.result
 
     asyncio.run(check())
+
+
+def test_worker_enforce_arm_registered(client, worker_session):
+    """Phase D: enforce HAS a delivery arm now. A mis-wired registry would
+    silently fall back to _deliver_unsupported; pin the registry shape."""
+    from app.core.remediation_worker import _DELIVERERS, _deliver_enforce
+
+    assert _DELIVERERS.get("enforce") is _deliver_enforce

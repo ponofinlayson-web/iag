@@ -95,10 +95,14 @@ pull the change back and close the drift window.
 4. Approved actions run against the directory through the source connector.
 5. The sync at the next cycle (or Sync now) mirrors the change back into IAG.
 
-In this build, enforcement actions are created and queued but the directory
-write-back arm is not delivered yet. Actions fail honestly with a clear
-message instead of pretending to run. The write-back lands with the
-enforcement engine phase.
+Enforcement write-back runs through the source connector. Each adapter
+writes in its own dialect: LDAP removes the user from the group or sets the
+disable attribute; Entra ID removes the group membership or clears
+accountEnabled; SQL runs the admin-supplied write statements. If the
+directory already shows the clean state (the user was removed, the account
+already disabled), the action completes as already clean without writing.
+CSV and spreadsheet sources have no write-back; their actions fail with a
+clear message and requeue for review rather than silently skipping.
 
 ### SQL sources
 
@@ -120,9 +124,10 @@ Provisioned users are duplicating
 : The externalId your IdP sends changed. Check the IdP's identifier setting
   and re-map.
 
-An enforcement action failed with "no delivery arm"
-: Expected in this build while the enforcement engine phase is pending. The
-  action will run once the phase ships.
+An enforcement action failed with "no enforcement write-back"
+: The source is a CSV or spreadsheet source. These have no directory to
+  write to. Point the rule at an LDAP, Entra ID or SQL source, or handle
+  the revoke outside IAG.
 
 An enforcement action completed but the directory did not change
 : Check that the entitlement name matches the directory group name, and that

@@ -99,10 +99,64 @@ B = ac6da0a (session 12); C = 1af1d8a, D = 9dec9bb (session 13); E =
 trend id-order fix + clock-step regression). Suite 172/172; TSC 0;
 fresh images on all 3 replicas [V]; alembic 0007 live [V]. Stack
 healthy at close. Feature 4 COMPLETE (session 10). Arc: 5/6 landed.
-NEXT (fresh chat): feature-6 spec draft (SCIM-class) - spec required
-before code, per arc rule; pattern per feature-4/5 specs. Exact words
-staged in User's-exact-words section below.
+NEXT: feature-6 spec DRAFTED (session 15, commit 7b2eb46) - D1-D8
+open, AWAITING RATIFICATION, no code before it. Docker daemon was
+DOWN at session close (relaunch before build work). Ratify -> record
+rulings -> ARCHITECTURE slot line -> Phases A-E per spec.
 ## Session log (newest first)
+
+### 2026-08-22 (session 15): FEATURE 6 SPEC DRAFTED (awaiting ratification)
+
+- Task per staged words: draft feature-6 spec, commit, STOP. Done:
+  SPECS/feature-6-scim-provisioning-enforcement.md (505 lines,
+  commit 7b2eb46), D1-D8 open. Zero code written (arc rule).
+- Spec shape: Part 1 inbound SCIM 2.0 server (/api/scim/v2 - under
+  /api so nginx needs no new location; token-authed with SHA-256
+  hash-at-rest reveal-once token; audit actor_username="scim" - the
+  first non-human chain actor; SCIM id = employee_id). Part 2
+  enforcement write-back (action_type=enforce rides the remediation
+  state machine - third delivery arm in run_pass; rule target
+  remove_entitlement/disable_account, migration 0008 = scim_settings
+  table + rules.target column; adapter write-backs ldap/entra/sql;
+  already-clean = success idempotency; mirror untouched by design).
+  Part 3 management surface + minimal frontend.
+- Forensics: v1 scim_service.py read in full (15,471 bytes). v1 was
+  INBOUND-ONLY (no outbound enforcement existed anywhere in v1) -
+  enforcement half designed fresh against feature-2 adapters. v1
+  defects designed out: reversibly-encrypted token at rest, IdP-
+  mints-login-accounts (default ON in v1; unimplementable in v2 -
+  no user-admin endpoint exists, verified), hard-delete deprovision,
+  parallel un-chained SCIMEvent log, SPC advertising Groups + sort
+  that never existed, phone=emails[0].value placeholder, unanchored
+  filter regex.
+- v2 facts verified during drafting: remediation_rules.action /
+  action_type are plain VARCHAR (no enum surgery for enforce);
+  Account.entitlement_id stays null for connector accounts (sync
+  never sets it - per-account entitlement membership is not stored;
+  recomputed from directory each run) - affects what enforcement can
+  resolve and the mirror-drift section; no user-management endpoint
+  exists (only bootstrap mints logins) - auto-create-login designed
+  out; remediation snapshot carries entitlement_name from
+  Account.entitlement_id (CSV grain) - connector-source revocations
+  may have null entitlement_name, handled.
+- Spec defects caught by self-review before commit: unneeded
+  ALTER TYPE for a 'scim' SourceType (cut - Identity.source is plain
+  String); auto_create_login described as implementable (cut to
+  designed-out with the no-user-admin fact); LDAP test specced
+  against glauth in pytest (fixed to MOCK strategy - pytest runs
+  without Docker, house rule); missing externalId 409 on POST;
+  PATCH path-less value-object form added (Okta's actual depro
+  shape); filter regex anchored (v1 accepted trailing junk).
+- ENV: Docker daemon DOWN at session open (known crash-loop; psql
+  fact-checks skipped - spec work needed no stack). Terminal wedged
+  once on an inline $_-in-string parse error; reset=true cleared it.
+  Corruption mode silent (chunked writes + read-back gates, all
+  clean; only fix was the terminal wedge, not file corruption).
+- NEXT (fresh chat): ratification. User rules on D1-D8 -> record
+  under USER DECISIONS RATIFIED -> add ARCHITECTURE.md design-slots
+  line -> Phases A-E may proceed (A = migration 0008 + core/scim.py
+  pure helpers + models + unit tests).
+
 
 ### 2026-08-22 (session 14): FEATURE 5 PHASE E - FEATURE COMPLETE
 
@@ -839,7 +893,7 @@ dup-line check; writes under ~120 lines).
   build/compose logs tailed, never streamed; targeted Select-String
   over full-file reads; never re-verify what this session already
   proved [V] - the label carries.
-- Startup reading budget: this file + SPECS/feature-5-risk-reports-siem.md
+- Startup reading budget: this file + SPECS/feature-6-scim-provisioning-enforcement.md
   fully; REQUIREMENTS/ARCHITECTURE only on demand (the spec encodes
   the build). Do not cat whole source files unmodified this session.
 - Early-warning self-check: re-reading the same file twice, losing
@@ -849,14 +903,12 @@ dup-line check; writes under ~120 lines).
 ## User's exact words for the new chat
 
 "Continue the IAG rebuild at D:\Projects\iag - read
-HANDOFF.md first. Feature 5 (risk/PDF/SIEM) is now COMPLETE
-(A-E: 980acb7, ac6da0a, 1af1d8a, 9dec9bb, 8391746; suite
-172/172, all three live proofs PASS on the rebuilt stack).
-Arc is 5/6. In this chat: draft the feature-6 spec
-(SCIM-class provisioning/enforcement - the last feature) in
-SPECS/ following the feature-4/5 spec pattern, with open
-decisions D1-Dn for ratification. Commit the draft and STOP
-for my ratification - no code before ratification."
+HANDOFF.md first. Feature 6 (SCIM + enforcement) spec is DRAFTED
+(commit 7b2eb46, SPECS/feature-6-scim-provisioning-enforcement.md,
+D1-D8 open). In this chat: I rule on D1-D8. Record my rulings under
+USER DECISIONS RATIFIED, add the ARCHITECTURE.md design-slots line,
+then begin Phases per the spec's build sequence. Docker daemon was
+down - relaunch it before any build."
 
 ## USER DECISIONS RATIFIED (2026-08-21 late, session 12)
 

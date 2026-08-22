@@ -93,36 +93,68 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Current status
 
-FEATURE 6 Phase B COMPLETE (session 18, c1bbfb9 +
-5438605). Spec ratified (session 16), Phase A done (session 17,
-d529760). Built this phase: routers/scim.py (prefix /api/scim/v2,
-router-level require_scim_token: Bearer-only constant-time compare,
-503 while disabled/tokenless, 401 + WWW-Authenticate otherwise;
-ServiceProviderConfig + Users list with EQ filter on userName/
-emails.value/externalId, 1-based paging, count clamp 200; create
-with externalId->employee_id and 409 dup answers; PUT with
-externalId-mismatch 400; PATCH replace-only both Okta shapes; DELETE
-soft + idempotent, retries audited; audit actor_username=scim
-same-TX on every write); main.py (ScimError envelope handler +
-SCIM-scoped 422->400, other paths byte-identical FastAPI default);
-tests/test_scim_api.py (24 integration tests). REAL BUG fixed while
-composing: normalize_patch emitted flat dotted name keys that
-scim_to_identity_fields could not read - name-only PATCH silently
-no-opped; now folds into nested name dict + regression test. Suite
-233/233 [V]. LIVE smoke PASS (scripts/live_scim_smoke.py, 10 legs,
-real PG through nginx: 503 disabled, psql-seeded token, 401 bad
-bearer, create/PATCH/DELETE, externalId filter, chain valid + scim
-actor in feed, disabled restored). ALL 3 replicas rebuilt on the
-Phase B image [V] (app-2/3 need their OWN builds - compose anchor
-gives each service its own image tag). Docker daemon dead at open,
-relaunched, healthy since. NEXT (fresh chat): Phase C per spec -
-management endpoints (GET/PUT /api/scim/config, POST/DELETE
-/api/scim/token, session-auth AdminUser, audit scim_config_updated/
-scim_token_rotated/scim_token_revoked) + frontend (settings panel
-reveal-once token modal, rules form enforce->target select, queue
-chips) + client.ts scim namespace + docs/admin-guide.md (ratified
-deliverable) + TSC gate.
+FEATURE 6 PHASE C COMPLETE (session 19, be1f3a1). Built: scim.py
+admin_router (GET/PUT /api/scim/config; POST/DELETE /api/scim/token -
+reveal-once iag_scim_* urlsafe, sha256 at rest, prefix+created_at in
+config, rotate kills old bearer same commit, revoke idempotent w/
+already_revoked, plain 400s not RFC7644 envelopes on the admin
+surface; audits scim_config_updated/scim_token_rotated/scim_token_revoked,
+session-auth AdminUser); remediation.py ACTIONS+enforce with target
+CRUD (target in {remove_entitlement,disable_account}, enforce+webhook
+400, default_action still rejects enforce), D6 tri-state
+require_approval (None => enforce ON / others unchanged), _rule_out
+exposes target; remediation_trigger.py snapshot freezes rule target +
+data_source_id (phase-D seam: queue Sync now links to source);
+remediation_worker.py _DELIVERERS registry + _deliver_unsupported -
+unknown action types fail with their own name (was: silent webhook-arm
+misroute; enforce now honestly says no delivery arm until D ships);
+frontend: client.ts scim namespace + ScimConfig/ScimTokenCreated +
+rule.target + snapshot keys, Remediation.tsx system_admin SCIM card
+(toggle/prefix/rotate/revoke-confirm) + reveal-once token modal w/
+externalId join-key guidance + enforce form option + target select +
+queue enforce badge/target/Sync now; docs/admin-guide.md (NEW dir;
+plain-English, task-shaped, troubleshooting). Tests: 14 new
+(test_scim_admin.py), suite 247/247 [V]. LIVE smoke PASS
+(scripts/live_scim_admin_smoke.py, 24 legs, reset-first idempotent,
+reads IAG_BOOTSTRAP_ADMIN_PASSWORD from env). All 3 replicas rebuilt
+healthy [V] (service names are iag-app-N in compose - `docker compose
+build iag-app-1 iag-app-2 iag-app-3`; `app-1` is not a service).
+NEXT (fresh chat): Phase D per spec - enforcement engine (directory
+write-back arm for enforce actions: connector-level apply for
+remove_entitlement/disable_account, snapshot.target + data_source_id
+are the seam, SQL admin-supplied statements, LDAP ops; hook
+_deliverers["enforce"]; queue UX already shows targets). After D:
+feature-6 close-out per spec (final spec-vs-code sweep + E2E).
+
 ## Session log (newest first)
+### 2026-08-22 (session 19): FEATURE 6 PHASE C (management + enforcement UX)
+
+- Commit be1f3a1 (single commit: backend + frontend + docs + tests +
+  smoke). Suite 247/247 [V] (14 new). npm run build (tsc -b + vite)
+  green [V]. Replicas rebuilt + healthy [V].
+- LIVE smoke 24/24 PASS [V] (scripts/live_scim_admin_smoke.py):
+  401 no-session; admin config GET/PUT; token generate reveal-once
+  (prefix shown, hash never); rotate kills old bearer same-commit;
+  revoke => 503 surface + enabled stays true; enforce rule CRUD live
+  (target pinned, approval ON default, bad target 400, enforce+
+  webhook 400, default_action enforce 400); rule delete; audit chain
+  valid. Script reads IAG_BOOTSTRAP_ADMIN_PASSWORD env (NOT
+  hardcoded); /api/audit/verify is session-gated (feed is not).
+- Worker dispatch guard: registry pattern (_DELIVERERS dict) replaces
+  the notify/webhook ternary; unknown types (incl. enforce until D)
+  raise "action_type X has no delivery arm in this build" and REQUEUE
+  (attempts<max) - not dead-letter; test pins the message + requeue.
+- Frontend gating: SCIM card only for me.role==="system_admin"
+  (cert_admin uses Remediation page but never sees the card; config
+  fetch fires only when the role grants it).
+- docs/ dir created this session (admin-guide.md first occupant).
+- GOTCHA (fresh): compose services are named iag-app-1/2/3 (project
+  prefix iag-); `docker compose build app-1` => no such service.
+- GOTCHA (fresh): IAG nginx publishes 8090, NOT 80 (80 is Plane).
+  localhost:80/api/scim/* => 404; use localhost:8090.
+- GOTCHA (fresh): container python3 has no fastapi on PATH context -
+  docker exec python -c "import app.main" fails; verify deployments
+  via HTTP probes instead.
 ### 2026-08-22 (session 18): FEATURE 6 PHASE B (SCIM router + token dependency)
 
 - Commits c1bbfb9 (router + dependency + 24 integration tests +

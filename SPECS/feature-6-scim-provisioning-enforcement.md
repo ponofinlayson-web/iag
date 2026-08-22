@@ -1,6 +1,8 @@
 # Feature 6 - SCIM provisioning & enforcement write-back
 
-Status: DRAFT (awaiting ratification - no code before ratification, arc rule).
+Status: RATIFIED (session 16, 2026-08-22 - user rulings: D1 bundle;
+D2, D4-D8 as drafted; D3 ratified with the schema-alignment
+amendment). Phases A-E unlocked.
 Fills the REQUIREMENTS.md 4 deferred-list entry "SCIM", the ARCHITECTURE.md
 slot line added at ratification (proposed: "SCIM provisioning and
 enforcement: inbound token-authed SCIM user feed; enforcement is connector
@@ -167,6 +169,17 @@ PUT/PATCH carrying an externalId that DISAGREES with the path id ->
 400 (the client is confused about which user it is writing; silently
 rewriting employee_id would break every join key in the system).
 Absent externalId in PUT/PATCH bodies: fine, id is immutable.
+
+Schema alignment (ratified invariant, session 16): IAG assumes no
+directory schema anywhere. Inbound: the IdP declares its own stable
+key as externalId, and employee_id stores that value verbatim - an
+AD-backed IdP pushes UPN, an HR-driven one pushes employee numbers;
+each source aligns itself by choosing what it declares. Outbound:
+enforcement resolves directory-native identifiers from per-source
+connector_config (account_attr for AD sAMAccountName/UPN/mail,
+object-id resolution for Entra, admin-supplied statements for SQL) -
+never a hard-coded attribute. This invariant ships in the end-user
+documentation (Part 3).
 
 ### Resource mapping (Identity <-> SCIM User)
 
@@ -353,6 +366,35 @@ trailing junk after the quoted value was silently accepted; v2's
 parser accepts the three clause shapes and nothing else), SPC
 document. Pure, unit-testable, no DB.
 
+### End-user documentation (ratified deliverable, session 16)
+
+The join-key and schema-alignment story must be legible to the
+person configuring IAG against a real IdP, not just to a spec
+reader. Deliverables:
+
+- `docs/admin-guide.md` (new repo dir docs/): an administrator's
+  guide covering - enabling SCIM + generating/rotating the token;
+  pointing an IdP at /api/scim/v2 (Okta + Entra SCIM-app settings,
+  bearer token placement); how externalId becomes the join key and
+  why it must be the authoritative source's stable key (AD-UPN vs
+  HR-number examples); remediation enforce rules end-to-end
+  (target choice, approval gate, mirror-drift window, "sync now");
+  and per-source connector_config fields that carry schema
+  alignment (account_attr, disable attribute, SQL statements with
+  bind params). Plain-English, task-shaped ("To connect Entra:"),
+  plain-English-content skill style.
+- Settings panel (Phase C): the reveal-once token modal carries a
+  one-paragraph hint - the token is shown once; the join key is
+  whatever your IdP sends as externalId; pick a stable one (UPN or
+  employee number, not display name).
+- Remediation rules form (Phase C): enforce-target help text -
+  remove_entitlement needs the entitlement name to be the directory
+  group name; disable_account writes to the account_attr the
+  connector matches on; SQL sources need admin-supplied statements.
+
+This is a Phase C deliverable (ships with the UI it documents),
+checked in the phase gate like any other work product.
+
 ## Frontend (minimal surface)
 
 - **Settings panel (System section or Remediation view header)**:
@@ -437,13 +479,18 @@ Live proofs (real Postgres, per house style):
   core/scim.py (pure mapping/filter/SPC) + unit tests.
 - B - SCIM protocol router + token dependency + integration tests.
 - C - management endpoints + frontend (settings panel, rules form,
-  queue chips) + client types + TSC.
+  queue chips) + client types + docs/admin-guide.md (ratified
+  deliverable) + TSC.
 - D - enforcement: rules target + trigger wiring + worker enforce arm
   + adapter write-backs (ldap live-capable, entra MockTransport, sql
   file) + tests.
 - E - live proofs (glauth enforce + disable, SCIM surface) + HANDOFF.
 
-## Open decisions for ratification
+## Decisions (ratified session 16, 2026-08-22)
+
+All eight ratified. D1: bundle (one feature, phases A-E). D3:
+ratified as amended - schema alignment at the value level + the
+end-user docs deliverable (Part 3). D2, D4-D8: as drafted.
 
 - **D1 THE BIG ONE - bundle**: inbound SCIM + outbound enforcement in
   one feature. They share the SCIM-class identity-lifecycle theme,
@@ -466,6 +513,17 @@ Live proofs (real Postgres, per house style):
   int (v1 - meaningless to the IdP), separate scim_id column (a new
   identifier for nothing: externalId IS the IdP's key for the user,
   and it is already unique).
+  RATIFIED AS AMENDED (session 16): user requirement - the join key
+  must align to the authoritative source's schema (AD may use UPN;
+  Entra differs). Resolution: alignment happens at the VALUE level,
+  not the id-scheme level - externalId is the IdP's own declaration
+  of its stable key and becomes employee_id verbatim (no IAG-side
+  schema assumption exists to misalign); directory-side alignment
+  lives in per-source connector_config (account_attr, disable
+  attribute, admin SQL), now stated as a ratified invariant; schema
+  introspection/discovery designed out (fixed operations, per-source
+  config is the mechanism); end-user documentation of all of this is
+  a ratified deliverable (Part 3).
 - **D4 token model**: single installation-wide SCIM token, SHA-256
   hash at rest, reveal-once, rotate = new + old dies at commit; NOT
   an ApiKey row (SCIM writes are not read-only - the feature-4 key

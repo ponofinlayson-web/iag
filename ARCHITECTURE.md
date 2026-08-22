@@ -74,4 +74,8 @@ Dockerfile            multi-stage: node build then python runtime
   (auditor/report_viewer only).
 - Risk, reports, and SIEM feed: read-side computation over governed
   data; SIEM is pull-only.
+- SCIM provisioning and enforcement: inbound token-authed SCIM user
+  feed; enforcement is connector write-back driven by remediation
+  actions (no assumed directory schema - alignment via per-source
+  connector_config; schema details in the feature-6 spec).
 - Read replicas: possible later, always read-only.

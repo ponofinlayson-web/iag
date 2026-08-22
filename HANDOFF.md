@@ -93,18 +93,46 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-FEATURE 5 COMPLETE (sessions 12-14). Phases A-E all landed: A = 980acb7,
-B = ac6da0a (session 12); C = 1af1d8a, D = 9dec9bb (session 13); E =
-8391746 (session 14: three live proofs ALL PASS on rebuilt stack, plus
-trend id-order fix + clock-step regression). Suite 172/172; TSC 0;
-fresh images on all 3 replicas [V]; alembic 0007 live [V]. Stack
-healthy at close. Feature 4 COMPLETE (session 10). Arc: 5/6 landed.
-NEXT: feature-6 spec DRAFTED (session 15; 7b2eb46 + entra-resolution
-fix 3b8ed38) - D1-D8 open, AWAITING RATIFICATION, no code before
-it. Docker daemon was DOWN at session close (relaunch before build
-work). Ratify -> record rulings -> ARCHITECTURE slot line ->
-Phases A-E per spec.
+FEATURE 6 (SCIM + enforcement) spec RATIFIED (session 16: D1
+bundle; D2/D4-D8 as drafted; D3 amended - schema alignment at
+value level, per-source connector_config invariant, end-user docs
+as Phase C deliverable). Spec: SPECS/feature-6-scim-provisioning-
+enforcement.md (7b2eb46 + 3b8ed38 + this session's ratification
+commit). ARCHITECTURE.md design-slots line added. pytest 172/172
+re-run at ratification [V]. Phases A-E unlocked; ZERO feature-6
+code exists yet. Feature 5 COMPLETE (sessions 12-14). Arc: 5/6
+landed; feature 6 is the LAST feature. Docker daemon relaunched
+this session after last close's crash-loop death - server 29.7.2
+up at session end [V]; budget a daemon death around any long
+build (session-14 lesson). NEXT (fresh chat): Phase A - migration
+0008 (scim_settings + remediation_rules.target, inspector-guarded
+0004 pattern) + models + app/core/scim.py pure helpers + unit
+tests; green gate; commit.
 ## Session log (newest first)
+
+### 2026-08-22 (session 16): FEATURE 6 RATIFIED - PHASES A-E UNLOCKED
+
+- User rulings on D1-D8: D1 bundle (one feature, phases A-E). D3
+  the only debate - user required the join key to align to the
+  authoritative source's schema (AD may use UPN; Entra differs)
+  and suggested schema discovery/introspection. Resolved and
+  ratified: alignment at the VALUE level (externalId is the IdP's
+  own declared key -> employee_id verbatim); directory side is
+  already per-source (connector_config account_attr etc. -
+  verified connectors.py:106 [V]); discovery designed out
+  (fixed ops + per-source config is the mechanism); invariant
+  paragraph + end-user docs now ratified spec content. D2, D4-D8
+  accepted as drafted; D8 deps claim fact-checked against
+  pyproject.toml BEFORE recording [V].
+- Spec edits: header DRAFT->RATIFIED, D3 amendment block,
+  schema-alignment invariant paragraph, "End-user documentation"
+  deliverable section (docs/admin-guide.md + UI help text, Phase
+  C), Phase C line updated. ARCHITECTURE.md design-slots line
+  added. pytest 172/172 re-run (house rule) [V].
+- ENV: Docker daemon relaunched (Start-Process Docker Desktop)
+  after crash-loop death at last close; server 29.7.2 up [V].
+- NEXT (fresh chat): Phase A per spec build phases. Exact words
+  below.
 
 ### 2026-08-22 (session 15): FEATURE 6 SPEC DRAFTED (awaiting ratification)
 
@@ -904,12 +932,43 @@ dup-line check; writes under ~120 lines).
 ## User's exact words for the new chat
 
 "Continue the IAG rebuild at D:\Projects\iag - read
-HANDOFF.md first. Feature 6 (SCIM + enforcement) spec is DRAFTED
-(7b2eb46 + 3b8ed38, SPECS/feature-6-scim-provisioning-enforcement.md,
-D1-D8 open). In this chat: I rule on D1-D8. Record my rulings under
-USER DECISIONS RATIFIED, add the ARCHITECTURE.md design-slots line,
-then begin Phases per the spec's build sequence. Docker daemon was
-down - relaunch it before any build."
+HANDOFF.md first. Feature 6 (SCIM + enforcement) spec is RATIFIED
+(session 16 - SPECS/feature-6-scim-provisioning-enforcement.md,
+D1-D8 ruled; D3 carries the schema-alignment amendment + Phase C
+end-user-docs deliverable). In this chat: build Phase A only
+(migration 0008 + models + core/scim.py pure helpers + unit
+tests), green-gate it, commit, and stop at the phase boundary.
+Docker daemon was up at last close (29.7.2) - verify before
+build."
+
+## USER DECISIONS RATIFIED (2026-08-22, session 16)
+
+1. **Feature-6 spec D1-D8: RATIFIED** (D1 bundle + D3 amended; D2,
+   D4-D8 as drafted).
+   - D1 (the big one): BUNDLE - inbound SCIM + outbound enforcement
+     in one feature, phases A-E in order. 6a/6b split declined.
+   - D3 (the only contested one): SCIM id = employee_id stands, but
+     RATIFIED AS AMENDED by the user's requirement that the join
+     key align to the authoritative source's schema. Resolution:
+     alignment at the VALUE level - externalId is whatever the IdP
+     declares as its stable key (AD may push UPN, HR-backed feeds
+     push employee numbers) and becomes employee_id verbatim;
+     directory-side alignment is per-source connector_config
+     (account_attr / disable attr / admin SQL - no assumed schema
+     anywhere, now a ratified invariant paragraph); schema
+     introspection/discovery designed out. User explicitly required
+     this be clear in END-USER DOCUMENTATION -> docs/admin-guide.md
+     + UI help text are ratified Phase C deliverables.
+   - D2: DELETE always soft (v1 hard-delete designed out). D4: one
+     install-wide SCIM token, SHA-256 at rest, reveal-once, NOT an
+     ApiKey row. D5: enforce rides the remediation state machine as
+     a third delivery arm. D6: require_approval defaults ON for
+     enforce rules. D7: SQL write-back = admin-supplied statements
+     with bind params, validate-at-save. D8: zero new dependencies
+     (fact-checked vs pyproject.toml before recording [V]).
+   - ARCHITECTURE.md design-slots line added; ratification commit
+     re-ran pytest 172/172 (house rule). Build phases A-E may
+     proceed. Feature 6 is the LAST feature - arc closes at E.
 
 ## USER DECISIONS RATIFIED (2026-08-21 late, session 12)
 

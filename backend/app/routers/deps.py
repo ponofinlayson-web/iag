@@ -101,6 +101,10 @@ AdminUser = Annotated[Principal, Depends(require_roles(Role.SYSTEM_ADMIN))]
 CertAdminUser = Annotated[
     Principal, Depends(require_roles(Role.SYSTEM_ADMIN, Role.CERTIFICATION_ADMIN))
 ]
+ReportViewer = Annotated[
+    Principal,
+    Depends(require_roles(Role.REPORT_VIEWER, Role.AUDITOR, Role.CERTIFICATION_ADMIN, Role.SYSTEM_ADMIN)),
+]
 AnyUser = Annotated[Principal, Depends(get_current_user)]
 
 async def get_session_user(

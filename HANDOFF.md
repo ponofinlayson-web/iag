@@ -93,23 +93,62 @@ uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
 
 ## Unverified / in-flight
 
-Feature 5 (risk/reports/SIEM) RATIFIED (57e4f1a) + Phases A+B BUILT
-(session 12): A = 980acb7 (migration 0007, models/risk.py, pure
-risk_engine 7 signals, 12 unit tests), B = ac6da0a (routers/risk.py
-4 endpoints, ReportViewer alias, 8 API tests). Suite 159/159.
-LIVE: migration 0007 applied to the real Postgres volume [V]
-(alembic_version=0007, risk_snapshots present, 0 rows); app image
-rebuilt once; app replicas still run the PRE-feature-5 image
-(no /api/risk routes live) - harmless, they are rebuilt+recreated
-at Phase C/D/E per protocol. ENVIRONMENT: Docker Desktop
-crash-looped 3x this session (daemon dies after ~2-4 min; also
-crashed once in session 11); if it recurs, restart Docker Desktop,
-`docker compose up -d`, and do not trust a wedge - reset the
-agent-canvas terminal. NEXT: Phases C+D in a fresh chat (SIEM feed
-+ report backend + frontend), then E (live proofs + HANDOFF).
+Feature 5 (risk/reports/SIEM) Phases A+B+C+D BUILT (sessions 12-13).
+A = 980acb7, B = ac6da0a (session 12); C = 1af1d8a, D = 9dec9bb
+(session 13). Suite 171/171; TSC 0; vite build landed in
+backend/static. App replicas STILL run the PRE-feature-5 image -
+Phase E must rebuild every service + force-recreate all 3 replicas
+(round-robin stale-image lesson) BEFORE live proofs. Migration 0007
+applied live [V] (session 12). REMAINING: Phase E only (three
+live-check scripts + run on rebuilt stack + HANDOFF/commit).
+ENVIRONMENT (session 13): Docker Desktop was fully dead at session
+start (post-crash-loop); Start-Process brought it back and the whole
+stack self-recovered via restart policies [V] - no manual compose up
+needed. If dead again: restart Docker Desktop, wait, verify
+`docker ps` shows all iag-* healthy; only then `docker compose up
+-d`. NEXT (fresh chat): Phase E, then feature-6 spec draft.
+Exact words staged in User's-exact-words section below.
 Feature 4 COMPLETE (session 10): 139/139 then, live proof PASS.
 Arc: 4/6 landed. Feature 6 (SCIM-class) needs its spec after 5.
 ## Session log (newest first)
+
+### 2026-08-21 late (session 13): FEATURE 5 PHASES C+D
+
+- Phase C (1af1d8a): SIEM feed live in routers/audit.py - GET
+  /api/audit/feed (JSONL, after_id cursor, limit 500/max 5000,
+  X-IAG-Last-Id + X-IAG-Head headers, bounded pre-fetch then
+  streamed) + GET /api/audit/feed/stats (totals + chain_head +
+  chain_valid). details ships parsed (nested JSON) with raw-string
+  fallback. 7 tests incl. client-side chain recompute walking
+  pages (the transportable-evidence proof: feed alone suffices to
+  verify integrity; recompute must re-canonicalize details and
+  append +00:00 to naive ts).
+- Phase D (9dec9bb): report endpoints in campaigns.py (GET
+  /{id}/report JSON: header/completion/decisions/reviewer workload
+  pending-desc/revocations detail/risk block from latest run;
+  GET /{id}/report.csv streamed). Frontend: Risk.tsx (summary
+  cards, top-10 factor drill-out, snapshots w/ band+department
+  filters + paging, trend sparkline panel, Compute now cert_admin+),
+  CampaignReport.tsx (/campaigns/:id/report, print CSS + window.print
+  + CSV link), Report button on CampaignDetail, Risk nav (4 read
+  roles). client.ts risk namespace + report methods.
+- Gates: pytest 171/171 (166 after C, 171 after D), TSC 0 first
+  pass, vite build -> backend/static.
+- GOTCHAs hit: (1) corruption mode ACTIVE this session - 5 garbled
+  writes (mangled keys, stray tokens like "Discipline:", junk
+  expressions) caught by read-back/py_compile/junk-grep EVERY time
+  before commit; chunks stayed small; (2) SQLAlchemy Row unpacking:
+  multi-entity select rows unpack to plain columns - `for u, fn, ln
+  in found` (NOT row.id); risk.py's whole-Row iteration is the
+  exception; (3) CSV upload upserts per (source, account_value) -
+  repeated account names collapse to ONE account (test fixture
+  needs distinct account values); (4) queue items DO carry
+  campaign_id; after a decision the queue shrinks - completed-
+  campaign loops must submit idx 0 repeatedly.
+- ENV: Docker Desktop fully dead at session start; Start-Process
+  relaunch + restart policies brought the whole stack back [V].
+  Stack healthy at close: all 3 replicas + db healthy.
+
 
 ### 2026-08-21 late (session 12): FEATURE 5 RATIFIED - BUILD STARTS
 
@@ -733,11 +772,11 @@ dup-line check; writes under ~120 lines).
   band/department/page, GET /trend/{id}, GET /summary),
   ReportViewer alias in deps.py (report_viewer/auditor/cert_admin/
   system_admin), integration tests incl. guards + API-key reads.
-3. Phase C: SIEM feed in routers/audit.py - GET /feed JSONL
+3. Phase C [DONE 1af1d8a]: SIEM feed in routers/audit.py - GET /feed JSONL
   (after_id cursor, limit 500/max 5000, X-IAG-Last-Id + X-IAG-Head
   headers) + GET /feed/stats; cursor-follows-id tests; auditor-key
   200 / report_viewer-key 403; streaming (no full buffering).
-4. Phase D: campaign report backend (GET /api/campaigns/{id}/report
+4. Phase D [DONE 9dec9bb]: campaign report backend (GET /api/campaigns/{id}/report
   JSON incl. reviewer workload + revocations + risk block;
   report.csv streamed) + frontend (Risk view, /campaigns/:id/report
   print CSS + window.print, client risk/report namespaces, nav);
@@ -777,12 +816,15 @@ dup-line check; writes under ~120 lines).
 ## User's exact words for the new chat
 
 "Continue the IAG rebuild at D:\Projects\iag - read
-HANDOFF.md first. Feature 5 (risk/PDF/SIEM): spec RATIFIED,
-Phases A+B are DONE and committed (980acb7, ac6da0a, suite
-159/159, migration 0007 already applied live). Build Phases
-C+D in this chat (SIEM feed, campaign report backend,
-frontend Risk view + report route) and stop at the phase
-boundary per the context-window protocol."
+HANDOFF.md first. Feature 5 (risk/PDF/SIEM): Phases A-D are
+DONE and committed (980acb7, ac6da0a, 1af1d8a, 9dec9bb; suite
+171/171, migration 0007 already applied live, app replicas
+still on the pre-feature-5 image). Run Phase E in this chat:
+write the three live-check scripts (live_risk_check,
+live_report_check, live_siem_check), rebuild the whole stack
+(all services + force-recreate all 3 app replicas), run all
+three proofs on the live Postgres, then close the feature in
+HANDOFF + memory and stop at the boundary."
 
 ## USER DECISIONS RATIFIED (2026-08-21 late, session 12)
 

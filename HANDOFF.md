@@ -99,10 +99,11 @@ B = ac6da0a (session 12); C = 1af1d8a, D = 9dec9bb (session 13); E =
 trend id-order fix + clock-step regression). Suite 172/172; TSC 0;
 fresh images on all 3 replicas [V]; alembic 0007 live [V]. Stack
 healthy at close. Feature 4 COMPLETE (session 10). Arc: 5/6 landed.
-NEXT: feature-6 spec DRAFTED (session 15, commit 7b2eb46) - D1-D8
-open, AWAITING RATIFICATION, no code before it. Docker daemon was
-DOWN at session close (relaunch before build work). Ratify -> record
-rulings -> ARCHITECTURE slot line -> Phases A-E per spec.
+NEXT: feature-6 spec DRAFTED (session 15; 7b2eb46 + entra-resolution
+fix 3b8ed38) - D1-D8 open, AWAITING RATIFICATION, no code before
+it. Docker daemon was DOWN at session close (relaunch before build
+work). Ratify -> record rulings -> ARCHITECTURE slot line ->
+Phases A-E per spec.
 ## Session log (newest first)
 
 ### 2026-08-22 (session 15): FEATURE 6 SPEC DRAFTED (awaiting ratification)
@@ -904,7 +905,7 @@ dup-line check; writes under ~120 lines).
 
 "Continue the IAG rebuild at D:\Projects\iag - read
 HANDOFF.md first. Feature 6 (SCIM + enforcement) spec is DRAFTED
-(commit 7b2eb46, SPECS/feature-6-scim-provisioning-enforcement.md,
+(7b2eb46 + 3b8ed38, SPECS/feature-6-scim-provisioning-enforcement.md,
 D1-D8 open). In this chat: I rule on D1-D8. Record my rulings under
 USER DECISIONS RATIFIED, add the ARCHITECTURE.md design-slots line,
 then begin Phases per the spec's build sequence. Docker daemon was

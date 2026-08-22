@@ -1,8 +1,11 @@
 """Campaign router: lifecycle, scope, dry-run preview, start."""
 from __future__ import annotations
+import csv
+import io
 import json
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, update
 from app.core.audit_service import append_audit
@@ -14,10 +17,12 @@ from app.core.email_templates import (
 from app.core.sod_engine import violations_for_identities
 from app.models.campaign import Campaign, CampaignStatus, Review, ReviewStatus
 from app.models.email import EmailOutbox, OutboxStatus
+from app.models.entitlement import Entitlement
 from app.models.identity import Identity, utcnow
+from app.models.risk import RiskSnapshot
 from app.models.source import Account, DataSource
 from app.models.user import Role, User
-from app.routers.deps import AnyUser, CertAdminUser, DbSession, get_settings
+from app.routers.deps import AnyUser, CertAdminUser, DbSession, ReportViewer, get_settings
 router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
 PRIVILEGED = ("high", "very_high")
 class CampaignIn(BaseModel):
@@ -338,3 +343,210 @@ async def campaign_metrics(campaign_id: int, db: DbSession, user: AnyUser):
         "completed": done,
         "progress_pct": round(100 * done / total, 1) if total else 0.0,
     }
+
+
+@router.get("/{campaign_id}/report")
+async def campaign_report(campaign_id: int, db: DbSession, user: ReportViewer):
+    """Executive report JSON: header, completion, decisions, reviewer
+    workload, revocation detail, risk block (spec Part 2)."""
+    c = await db.get(Campaign, campaign_id)
+    if c is None:
+        raise HTTPException(404, "Campaign not found")
+    rows = (
+        await db.execute(
+            select(Review)
+            .where(Review.campaign_id == campaign_id)
+            .order_by(Review.id)
+        )
+    ).scalars().all()
+    by_status: dict[str, int] = {}
+    for r in rows:
+        by_status[r.status.value] = by_status.get(r.status.value, 0) + 1
+    total = len(rows)
+    done = by_status.get("approved", 0) + by_status.get("revoked", 0)
+    # --- reviewer workload: one row per reviewer, sorted pending desc ---
+    reviewer_ids = {r.reviewer_id for r in rows}
+    reviewer_names: dict[int, str] = {}
+    if reviewer_ids:
+        found = (
+            await db.execute(
+                select(User.id, Identity.first_name, Identity.last_name)
+                .join(Identity, User.identity_id == Identity.id)
+                .where(User.id.in_(reviewer_ids))
+            )
+        ).all()
+        reviewer_names = {uid: " ".join(x for x in (fn, ln) if x) for uid, fn, ln in found}
+    workload = {}
+    for r in rows:
+        w = workload.setdefault(
+            r.reviewer_id,
+            {"reviewer": reviewer_names.get(r.reviewer_id) or f"user:{r.reviewer_id}",
+             "assigned": 0, "approved": 0, "revoked": 0, "pending": 0},
+        )
+        w["assigned"] += 1
+        if r.status == ReviewStatus.APPROVED:
+            w["approved"] += 1
+        elif r.status == ReviewStatus.REVOKED:
+            w["revoked"] += 1
+        else:
+            w["pending"] += 1
+    workload_rows = sorted(workload.values(), key=lambda w: -w["pending"])
+    # --- revocations detail: comment is mandatory so always meaningful ---
+    account_ids = {r.account_id for r in rows}
+    acct_rows = (
+        await db.execute(
+            select(Account, Entitlement.name, DataSource.name)
+            .join(Entitlement, Account.entitlement_id == Entitlement.id, isouter=True)
+            .join(DataSource, Account.data_source_id == DataSource.id, isouter=True)
+            .where(Account.id.in_(account_ids))
+        )
+    ).all() if account_ids else []
+    acct_by_id = {a.id: (a, ename, sname) for a, ename, sname in acct_rows}
+    ident_ids = {a.identity_id for a, _, _ in acct_rows if a.identity_id is not None}
+    ident_names: dict[int, dict] = {}
+    if ident_ids:
+        found_i = (
+            await db.execute(
+                select(Identity.id, Identity.first_name, Identity.last_name,
+                       Identity.employee_id)
+                .where(Identity.id.in_(ident_ids))
+            )
+        ).all()
+        ident_names = {
+            i: {"name": " ".join(x for x in (fn, ln) if x) or None, "employee_id": eid}
+            for i, fn, ln, eid in found_i
+        }
+    revocations = []
+    for r in rows:
+        if r.status != ReviewStatus.REVOKED:
+            continue
+        a, ename, sname = acct_by_id.get(r.account_id, (None, None, None))
+        ident = ident_names.get(a.identity_id, {}) if a else {}
+        revocations.append({
+            "identity": ident.get("name"),
+            "employee_id": ident.get("employee_id"),
+            "account": a.account_value if a else None,
+            "entitlement": ename,
+            "source": sname,
+            "decided_at": r.completed_at.isoformat() if r.completed_at else None,
+            "reviewer": reviewer_names.get(r.reviewer_id),
+            "comment": r.comments,
+        })
+    # --- risk block: band distribution of reviewed identities (latest run) ---
+    latest_run = (
+        await db.execute(
+            select(RiskSnapshot.run_id).order_by(RiskSnapshot.id.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    risk_block = None
+    if latest_run is not None:
+        risk_ids = {a.identity_id for a, _, _ in acct_rows if a.identity_id is not None}
+        snap_rows = (
+            await db.execute(
+                select(RiskSnapshot.identity_id, RiskSnapshot.band)
+                .where(RiskSnapshot.run_id == latest_run,
+                       RiskSnapshot.identity_id.in_(risk_ids))
+            )
+        ).all() if risk_ids else []
+        dist: dict[str, int] = {}
+        for _, band in snap_rows:
+            dist[band] = dist.get(band, 0) + 1
+        risk_block = {
+            "run_id": latest_run,
+            "scored_in_campaign": len(snap_rows),
+            "band_distribution": dist,
+        }
+    return {
+        "campaign": {
+            "id": c.id,
+            "name": c.name,
+            "description": c.description,
+            "status": c.status.value,
+            "review_mode": c.review_mode,
+            "deadline": c.deadline.isoformat() if c.deadline else None,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        },
+        "generated_at": utcnow().isoformat(),
+        "completion": {
+            "total": total,
+            "completed": done,
+            "pending": by_status.get("pending", 0) + by_status.get("in_progress", 0),
+            "progress_pct": round(100 * done / total, 1) if total else 0.0,
+        },
+        "decisions": by_status,
+        "reviewer_workload": workload_rows,
+        "revocations": revocations,
+        "risk": risk_block,
+    }
+
+
+@router.get("/{campaign_id}/report.csv")
+async def campaign_report_csv(campaign_id: int, db: DbSession, user: ReportViewer):
+    """Streamed decision rows (house pattern; no files on replicas)."""
+    c = await db.get(Campaign, campaign_id)
+    if c is None:
+        raise HTTPException(404, "Campaign not found")
+    rows = (
+        await db.execute(
+            select(Review)
+            .where(Review.campaign_id == campaign_id)
+            .order_by(Review.id)
+        )
+    ).scalars().all()
+    account_ids = {r.account_id for r in rows}
+    acct_rows = (
+        await db.execute(
+            select(Account, Entitlement.name, DataSource.name)
+            .join(Entitlement, Account.entitlement_id == Entitlement.id, isouter=True)
+            .join(DataSource, Account.data_source_id == DataSource.id, isouter=True)
+            .where(Account.id.in_(account_ids))
+        )
+    ).all() if account_ids else []
+    acct_by_id = {a.id: (a, ename, sname) for a, ename, sname in acct_rows}
+    ident_ids = {a.identity_id for a, _, _ in acct_rows if a.identity_id is not None}
+    ident_names: dict[int, tuple[str, str]] = {}
+    if ident_ids:
+        found_i = (
+            await db.execute(
+                select(
+                    Identity.id, Identity.first_name, Identity.last_name,
+                    Identity.employee_id,
+                ).where(Identity.id.in_(ident_ids))
+            )
+        ).all()
+        ident_names = {
+            i: (" ".join(x for x in (fn, ln) if x) or "", eid)
+            for i, fn, ln, eid in found_i
+        }
+    reviewer_ids = {r.reviewer_id for r in rows}
+    reviewer_names: dict[int, str] = {}
+    if reviewer_ids:
+        found = (
+            await db.execute(
+                select(User.id, Identity.first_name, Identity.last_name)
+                .join(Identity, User.identity_id == Identity.id)
+                .where(User.id.in_(reviewer_ids))
+            )
+        ).all()
+        reviewer_names = {uid: " ".join(x for x in (fn, ln) if x) for uid, fn, ln in found}
+    header = ["identity", "employee_id", "source", "entitlement", "account",
+              "privilege", "reviewer", "decision", "decided_at", "comment"]
+    def gen():
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(header)
+        yield buf.getvalue()
+        for r in rows:
+            a, ename, sname = acct_by_id.get(r.account_id, (None, None, None))
+            ident = ident_names.get(a.identity_id, ("", "")) if a else ("", "")
+            buf = io.StringIO()
+            w = csv.writer(buf)
+            w.writerow([
+                ident[0], ident[1], sname or "", ename or "",
+                a.account_value if a else "", a.privilege_level if a else "",
+                reviewer_names.get(r.reviewer_id, ""),
+                r.status.value, r.completed_at.isoformat() if r.completed_at else "",
+                r.comments or "",
+            ])
+            yield buf.getvalue()
+    return StreamingResponse(gen(), media_type="text/csv")

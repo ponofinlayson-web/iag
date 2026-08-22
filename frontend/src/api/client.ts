@@ -299,6 +299,91 @@ export interface ChainStatus {
   reason?: string;
 }
 
+export interface RiskFactor {
+  signal: string;
+  contribution: number;
+  detail: string;
+}
+
+export interface RiskTopIdentity {
+  employee_id: string;
+  name: string | null;
+  score: number;
+  band: string;
+  top_factors: RiskFactor[];
+}
+
+export interface RiskSummary {
+  run_id: string | null;
+  run_at: string | null;
+  scored_identities: number;
+  average_score: number;
+  band_distribution: Record<string, number>;
+  top_risky: RiskTopIdentity[];
+}
+
+export interface RiskSnapshotRow {
+  id: number;
+  run_id: string;
+  identity_id: number | null;
+  employee_id: string;
+  score: number;
+  band: string;
+  signals: Record<string, number>;
+  name: string | null;
+  department: string | null;
+}
+
+export interface RiskTrendPoint {
+  run_id: string;
+  score: number;
+  band: string;
+  signals: Record<string, number>;
+  computed_at: string;
+}
+
+export interface CampaignReport {
+  campaign: {
+    id: number;
+    name: string;
+    description: string | null;
+    status: string;
+    review_mode: string;
+    deadline: string | null;
+    created_at: string | null;
+  };
+  generated_at: string;
+  completion: {
+    total: number;
+    completed: number;
+    pending: number;
+    progress_pct: number;
+  };
+  decisions: Record<string, number>;
+  reviewer_workload: Array<{
+    reviewer: string;
+    assigned: number;
+    approved: number;
+    revoked: number;
+    pending: number;
+  }>;
+  revocations: Array<{
+    identity: string | null;
+    employee_id: string | null;
+    account: string | null;
+    entitlement: string | null;
+    source: string | null;
+    decided_at: string | null;
+    reviewer: string | null;
+    comment: string | null;
+  }>;
+  risk: {
+    run_id: string;
+    scored_in_campaign: number;
+    band_distribution: Record<string, number>;
+  } | null;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -482,6 +567,21 @@ export const api = {
       request<{ campaign_id: number; status: string; by_status: Record<string, number>; total: number; completed: number; progress_pct: number }>(
         `/api/campaigns/${id}/metrics`,
       ),
+    report: (id: number) =>
+      request<CampaignReport>(`/api/campaigns/${id}/report`),
+    reportCsvUrl: (id: number) => `/api/campaigns/${id}/report.csv`,
+  },
+  risk: {
+    run: () =>
+      request<{ run_id: string; scored_identities: number; average_score: number; band_distribution: Record<string, number> }>(
+        "/api/risk/runs",
+        { method: "POST" },
+      ),
+    summary: () => request<RiskSummary>("/api/risk/summary"),
+    snapshots: (params: { run_id?: string; band?: string; department?: string; page?: number; page_size?: number }) =>
+      request<Paged<RiskSnapshotRow> & { run_id: string | null }>(`/api/risk/snapshots?${toQuery(params)}`),
+    trend: (identityId: number) =>
+      request<{ identity_id: number; items: RiskTrendPoint[] }>(`/api/risk/trend/${identityId}`),
   },
   reviews: {
     queue: (params?: { page?: number; page_size?: number }) =>

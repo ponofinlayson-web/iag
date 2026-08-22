@@ -103,6 +103,9 @@ export default function CampaignDetail() {
               Cancel
             </button>
           )}
+          <button className="secondary" onClick={() => nav(`/campaigns/${cid}/report`)}>
+            Report
+          </button>
         </div>
       </Card>
       {preview && (

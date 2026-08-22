@@ -14,6 +14,8 @@ import SodRules from "./views/SodRules";
 import Remediation from "./views/Remediation";
 import ApiKeys from "./views/ApiKeys";
 import Outbox from "./views/Outbox";
+import Risk from "./views/Risk";
+import CampaignReport from "./views/CampaignReport";
 
 export default function App() {
   const { me, loading } = useAuth();
@@ -36,6 +38,8 @@ export default function App() {
         <Route path="/entitlements" element={<Entitlements />} />
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/campaigns/:id" element={<CampaignDetail />} />
+        <Route path="/campaigns/:id/report" element={<CampaignReport />} />
+        <Route path="/risk" element={<Risk />} />
         <Route path="/sod" element={<SodRules />} />
         <Route path="/remediation" element={<Remediation />} />
       <Route path="/api-keys" element={<ApiKeys />} />

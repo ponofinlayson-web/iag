@@ -125,3 +125,38 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
   background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
   padding: 10px; word-break: break-all; user-select: all;
 }
+
+/* --- Campaign report (print-to-PDF surface) --- */
+.report { max-width: 60rem; }
+.report-actions { display: flex; gap: 8px; margin-bottom: 16px; }
+.report-actions .btn-secondary,
+.report-actions button {
+  display: inline-block; padding: 6px 12px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--panel-2);
+  color: var(--text); text-decoration: none; cursor: pointer; font: inherit;
+}
+.report-header { margin-bottom: 12px; }
+.report-header h1 { margin-bottom: 4px; }
+.report section { break-inside: avoid; margin: 14px 0; }
+.report table { page-break-inside: auto; }
+.report tr { page-break-inside: avoid; }
+.report-actions button { background: var(--accent, #2563eb); color: #fff; border-color: transparent; }
+
+@media print {
+  .topbar, .report-actions, .no-print { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+  .shell { display: block !important; }
+  main { padding: 0 !important; margin: 0 !important; }
+  .report { max-width: none; }
+  .report .card, .card {
+    background: #fff !important; color: #000 !important;
+    border-color: #999 !important; box-shadow: none !important;
+  }
+  .report h1, .report h2, .report p, .report td, .report th, .report .muted {
+    color: #000 !important;
+  }
+  .badge { border: 1px solid #000 !important; background: #fff !important; color: #000 !important; }
+  table { border-collapse: collapse; }
+  th, td { border: 1px solid #000 !important; padding: 4px 6px; }
+  thead { display: table-header-group; }
+}

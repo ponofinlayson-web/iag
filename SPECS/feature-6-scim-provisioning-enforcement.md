@@ -271,12 +271,15 @@ identifiers before writing:
   entitlement name IS the group name (sync's _dn_to_name collapses
   memberOf DNs to names; enforcement re-expands the name to a DN).
   disable_account: modify the user entry directly.
-- **entra**: account_value is userPrincipalName. remove_entitlement:
+- **entra**: account_value is userPrincipalName. Both entra targets
+  address users by object id, so resolve UPN -> id first (GET
+  /users?$filter=userPrincipalName eq 'X'). remove_entitlement:
   resolve group object id by displayName (GET
-  /groups?$filter=displayName eq 'NAME'), then DELETE member. If the
-  user is not a (transitive) member, treat as already-clean and
-  succeed (idempotent: revoking an entitlement the directory already
-  removed is a success, not an error).
+  /groups?$filter=displayName eq 'NAME'), then DELETE
+  /groups/{gid}/members/{uid}/$ref. If the user is not a (transitive)
+  member, treat as already-clean and succeed (idempotent: revoking
+  an entitlement the directory already removed is a success, not an
+  error). disable_account: PATCH /users/{uid} accountEnabled=false.
 - **sql**: there is no default write-back (a SQL source is a custom
   integration by definition). The rule's source filter selects a sql
   source; its connector_config may carry `remove_entitlement_sql` and

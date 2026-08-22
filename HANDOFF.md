@@ -119,14 +119,65 @@ plain-English, task-shaped, troubleshooting). Tests: 14 new
 reads IAG_BOOTSTRAP_ADMIN_PASSWORD from env). All 3 replicas rebuilt
 healthy [V] (service names are iag-app-N in compose - `docker compose
 build iag-app-1 iag-app-2 iag-app-3`; `app-1` is not a service).
-NEXT (fresh chat): Phase D per spec - enforcement engine (directory
-write-back arm for enforce actions: connector-level apply for
-remove_entitlement/disable_account, snapshot.target + data_source_id
-are the seam, SQL admin-supplied statements, LDAP ops; hook
-_deliverers["enforce"]; queue UX already shows targets). After D:
+## Current status (2026-08-22, session 20 close)
+
+Feature 6 Phase D COMPLETE (commit 5d80980): enforcement write-back
+engine shipped. app/core/enforcement.py — enforce_against_source()
+dispatches per-adapter arms {ldap, entra, sql}, sharing connectors.py
+infrastructure (write conn factory, entra client via _cx late-bind, SQL
+engine + admin statements with bound params). All arms idempotence-aware:
+clean-state check FIRST, "already clean" completes without a directory
+write (ldap reads the GROUP's forward-link member attr, not the user's
+memberOf back-link — back-links go stale after direct writes; entra
+checks the members set). csv/unknown types fail loud naming the type and
+REQUEUE (not dead-letter). remediation_worker.py _deliver_enforce +
+_DELIVERERS["enforce"] hook; unknown-type guard intact (test retargeted
+to carrier_pigeon since enforce now HAS an arm).
+
+Tests: test_enforcement.py 17 E2E tests — rules fired through the real
+phase-C rules API, reviews via real campaign stage/start; ldap3 MOCK
+writeable server, httpx.MockTransport routed on request.url.path +
+DECODED url.params (raw query percent-encodes $ as %24 — str(url)
+substring checks never match), real SQLite file DBs. D6 interplay
+pinned: enforce rules default require_approval ON; fast-path tests use
+the documented opt-out, gated test keeps the default (claims 0 while
+pending_approval, delivers after approve). Feature-3 rules are
+cumulative — test helper deactivates prior enforce rules to keep
+one-revoke-one-action. Suite 265/265 [V] (247+18).
+
+Docs: admin-guide "not delivered yet" note replaced with delivered
+per-adapter behaviour; csv troubleshooting entry updated.
+
+NEXT (fresh chat): Phase E per spec - live proofs (LDAP/Entra/SQL
+write-back against real deployments + live smoke extension), then
 feature-6 close-out per spec (final spec-vs-code sweep + E2E).
 
 ## Session log (newest first)
+### 2026-08-22 (session 20): FEATURE 6 PHASE D (enforcement write-back engine)
+
+- Commit 5d80980 (single commit: engine + worker hook + tests + docs).
+  Suite 265/265 [V] (17 new test_enforcement.py + 1 retargeted
+  dispatch-guard). Full-suite rerun green after all changes [V].
+- enforcement.py arms: LDAP group-member MODIFY_DELETE / disable-attr
+  MODIFY_REPLACE; Entra member $ref DELETE / accountEnabled PATCH; SQL
+  admin-supplied statements, bound params pinned by test. Guards: no
+  entitlement in snapshot (disable target ok), missing disable config,
+  user/group not found fail clear; ldap unbind in finally.
+- Already-clean semantics: second run completes without writing (pinned
+  per adapter: ldap group attr, entra member set, sql statement result).
+- Worker: _deliver_enforce resolves snapshot.target + data_source_id ->
+  source row -> arm; errors requeue while attempts<max (same fork-A
+  discipline), remediation_action_executed audit with target+result,
+  hash chain verify green.
+- Raw-SQL seeding gotchas hit + documented in memory: SQLAlchemy Enum
+  stores NAMES ('PENDING'/'ACTIVE'); accounts/campaigns/entitlements
+  rows need explicit created_at/status/scope/is_active; /api/audit
+  returns details as a JSON string — parse client-side.
+- test helper discipline: _make_enforce_rule deactivates prior enforce
+  rules (feature-3 fires ALL matches); _revoke_bob scoped per-source +
+  decision IS NULL (reviews one-shot); _ensure_bound re-binds MOCK conn
+  after the arm's finally-unbind (inspection still works).
+
 ### 2026-08-22 (session 19): FEATURE 6 PHASE C (management + enforcement UX)
 
 - Commit be1f3a1 (single commit: backend + frontend + docs + tests +

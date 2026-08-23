@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { CampaignDetail as CD, SodViolation } from "../api/client";
+import type { CampaignDetail as CD, SodViolation, Source } from "../api/client";
 import { Badge, Card, errMsg, statusTone } from "../components/ui";
 
 interface Preview {
@@ -108,6 +108,19 @@ export default function CampaignDetail() {
           </button>
         </div>
       </Card>
+      <ScopeSummary scope={camp.scope} />
+      {(camp.status === "draft" || camp.status === "staged") && (
+        <ScopeEditor
+          key={`${camp.id}:${JSON.stringify(camp.scope)}`}
+          camp={camp}
+          onSaved={async () => {
+            setNotice("Scope saved");
+            setPreview(null);
+            await load();
+          }}
+          setError={setError}
+        />
+      )}
       {preview && (
         <Card title={`DRY-RUN preview — ${preview.will_create} of ${preview.total_in_scope} in scope`}>
           {preview.sod.identities_flagged > 0 ? (
@@ -177,5 +190,141 @@ export default function CampaignDetail() {
         </Card>
       )}
     </div>
+  );
+}
+
+function scopeChips(scope: Record<string, unknown>): string[] {
+  const chips: string[] = [];
+  const ids = scope.data_source_ids;
+  if (Array.isArray(ids) && ids.length > 0) chips.push(`sources #${ids.join(", #")}`);
+  const deps = scope.departments;
+  if (Array.isArray(deps) && deps.length > 0) chips.push(`departments: ${deps.join(", ")}`);
+  if (scope.privileged_only) chips.push("privileged only");
+  if (scope.unlinked_only) chips.push("unlinked only");
+  return chips;
+}
+
+function ScopeSummary({ scope }: { scope: Record<string, unknown> }) {
+  const chips = scopeChips(scope);
+  return (
+    <Card title="Scope">
+      {chips.length === 0 ? (
+        <p className="muted">All accounts across every source (no filters).</p>
+      ) : (
+        <p>{chips.join(" · ")}</p>
+      )}
+    </Card>
+  );
+}
+
+function ScopeEditor({
+  camp,
+  onSaved,
+  setError,
+}: {
+  camp: CD;
+  onSaved: () => Promise<void>;
+  setError: (s: string) => void;
+}) {
+  const initial = camp.scope ?? {};
+  const arr = (v: unknown): number[] => (Array.isArray(v) ? v.map(Number) : []);
+  const [sources, setSources] = useState<Source[] | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set(arr(initial.data_source_ids)));
+  const [departments, setDepartments] = useState(
+    Array.isArray(initial.departments) ? initial.departments.join(", ") : "",
+  );
+  const [privilegedOnly, setPrivilegedOnly] = useState(Boolean(initial.privileged_only));
+  const [unlinkedOnly, setUnlinkedOnly] = useState(Boolean(initial.unlinked_only));
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.sources.list().then((r) => setSources(r.items)).catch(() => setSources([]));
+  }, []);
+
+  function toggle(id: number) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  }
+
+  async function save() {
+    setBusy(true);
+    try {
+      await api.campaigns.update(camp.id, {
+        name: camp.name,
+        description: camp.description,
+        review_mode: camp.review_mode,
+        deadline: camp.deadline,
+        scope: {
+          ...(selected.size > 0 ? { data_source_ids: [...selected] } : {}),
+          ...(departments.trim()
+            ? { departments: departments.split(",").map((d) => d.trim()).filter(Boolean) }
+            : {}),
+          ...(privilegedOnly ? { privileged_only: true } : {}),
+          ...(unlinkedOnly ? { unlinked_only: true } : {}),
+        },
+      });
+      await onSaved();
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card title="Edit scope (draft / staged only)">
+      <p className="muted">
+        Empty scope = every account in every source. All filters are ANDed. Re-run the dry-run
+        preview after changing scope.
+      </p>
+      <div className="form-grid">
+        <div>
+          Sources (none checked = all)
+          {!sources ? (
+            <p className="muted">Loading…</p>
+          ) : (
+            sources.map((s) => (
+              <label key={s.id} className="row" style={{ gap: 6 }}>
+                <input
+                  type="checkbox"
+                  checked={selected.has(s.id)}
+                  onChange={() => toggle(s.id)}
+                />
+                #{s.id} {s.name} ({s.source_type})
+              </label>
+            ))
+          )}
+        </div>
+        <label>
+          Departments (comma-separated)
+          <input
+            value={departments}
+            onChange={(e) => setDepartments(e.target.value)}
+            placeholder="Engineering, Finance"
+          />
+        </label>
+        <label className="row" style={{ gap: 6 }}>
+          <input
+            type="checkbox"
+            checked={privilegedOnly}
+            onChange={(e) => setPrivilegedOnly(e.target.checked)}
+          />
+          Privileged accounts only
+        </label>
+        <label className="row" style={{ gap: 6 }}>
+          <input
+            type="checkbox"
+            checked={unlinkedOnly}
+            onChange={(e) => setUnlinkedOnly(e.target.checked)}
+          />
+          Unlinked accounts only
+        </label>
+      </div>
+      <button onClick={() => void save()} disabled={busy}>
+        {busy ? "Saving…" : "Save scope"}
+      </button>
+    </Card>
   );
 }

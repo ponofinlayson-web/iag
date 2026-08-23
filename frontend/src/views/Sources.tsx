@@ -303,9 +303,12 @@ function ConnectorPanel({
   setNotice,
 }: Msg & { source: Source; onClose: () => void; reload: () => Promise<void> }) {
   const fields = CONNECTOR_FIELDS[source.source_type ?? ""] ?? [];
-  const [config, setConfig] = useState<Record<string, string>>({});
+  const stored = source.connector?.config ?? {};
+  const [config, setConfig] = useState<Record<string, string>>({ ...stored });
   const [secret, setSecret] = useState("");
-  const [interval, setIntervalInput] = useState("");
+  const [interval, setIntervalInput] = useState(
+    source.connector?.interval_minutes != null ? String(source.connector.interval_minutes) : "",
+  );
   const [busy, setBusy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 

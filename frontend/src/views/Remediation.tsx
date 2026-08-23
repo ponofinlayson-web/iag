@@ -54,6 +54,10 @@ export default function Remediation() {
   const [privilege, setPrivilege] = useState("");
   const [requireApproval, setRequireApproval] = useState(false);
   const [regexOk, setRegexOk] = useState(true);
+  const [sourceId, setSourceId] = useState("");
+  const [sourcesList, setSourcesList] = useState<
+    { id: number; name: string; source_type: string | null }[]
+  >([]);
 
   function load() {
     api.remediation.rules().then((r) => setRules(r.items)).catch((e) => setError(e.message));
@@ -62,6 +66,7 @@ export default function Remediation() {
       .then((r) => setActions(r.items))
       .catch((e) => setError(e.message));
     api.remediation.settings().then(setSettings).catch((e) => setError(e.message));
+    api.sources.list().then((r) => setSourcesList(r.items)).catch(() => undefined);
   }
 
   function loadScim() {
@@ -98,6 +103,7 @@ export default function Remediation() {
         webhook_url: action === "webhook" ? webhookUrl : null,
         entitlement_pattern: pattern || null,
         privilege_level: privilege || null,
+        data_source_id: sourceId ? Number(sourceId) : null,
         // undefined = let the backend apply its defaults (enforce => ON)
         require_approval: action === "enforce" ? requireApproval || undefined : requireApproval,
       });
@@ -108,6 +114,7 @@ export default function Remediation() {
       setPrivilege("");
       setRequireApproval(false);
       setTarget("remove_entitlement");
+      setSourceId("");
       load();
     } catch (e) {
       setError(errMsg(e));
@@ -372,6 +379,21 @@ export default function Remediation() {
           </div>
         )}
         <div className="row" style={{ marginBottom: 8 }}>
+          <select
+            value={sourceId}
+            onChange={(e) => setSourceId(e.target.value)}
+            aria-label="Restrict to source"
+          >
+            <option value="">all sources</option>
+            {sourcesList.map((s) => (
+              <option key={s.id} value={s.id}>
+                #{s.id} {s.name} ({s.source_type})
+              </option>
+            ))}
+          </select>
+          <span className="muted">restrict rule to one source (optional)</span>
+        </div>
+        <div className="row" style={{ marginBottom: 8 }}>
           <input
             placeholder="Entitlement regex (optional)"
             value={pattern}
@@ -421,6 +443,7 @@ export default function Remediation() {
                     {[
                       r.privilege_level,
                       r.entitlement_pattern,
+                      r.data_source_id != null ? `source #${r.data_source_id}` : null,
                     ].filter(Boolean).join(" · ") || "catch-all"}
                   </td>
                    <td>

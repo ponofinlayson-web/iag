@@ -59,6 +59,7 @@ export interface Source {
 
 export interface ConnectorBlock {
   configured: boolean;
+  config: Record<string, string>;
   interval_minutes: number | null;
   next_sync_at: string | null;
   has_secret: boolean;

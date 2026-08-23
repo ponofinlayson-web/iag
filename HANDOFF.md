@@ -119,6 +119,84 @@ plain-English, task-shaped, troubleshooting). Tests: 14 new
 reads IAG_BOOTSTRAP_ADMIN_PASSWORD from env). All 3 replicas rebuilt
 healthy [V] (service names are iag-app-N in compose - `docker compose
 build iag-app-1 iag-app-2 iag-app-3`; `app-1` is not a service).
+## Current status (2026-08-23, session 22 close)
+T1 E2E BROWSER PASS COMPLETE [V]. Full UI spine walked end-to-end in
+the real browser as e2e_admin (certification_admin) against the live
+glauth stack: source -> configure connector (live bind validation) ->
+sync (3 accounts + 4 entitlements) -> campaign create (UI) + scope
+(PUT API; no UI scope editor yet) -> preview 3/3 -> stage -> start ->
+decide (approve via UI; two revokes via API) -> campaign
+auto-completed 100% -> report page + CSV + Print/PDF. Remediation
+rule created/fired/deleted via UI (notify_owner actions #31/#32 ->
+failed ConnectionRefused after 3 retries; no SMTP container by
+design). Enforce rules 55-57 scoped to sources 17/18, so no
+accidental enforcement against the dead openldap container.
+Why revokes went via API: Reviews.tsx uses window.prompt for the
+mandatory revoke comment; native dialogs are outside browser-tool
+reach (same class of limit as native <select>). Product fix queued in
+polish list, not a defect found in the API.
+T3 POLISH LIST (from live findings, in priority order):
+1. Connector panel remounts empty + backend PUT replace-semantics
+   means saving with a blank field wipes the stored config (echo the
+   stored config back into the form; consider merge-not-replace).
+2. Reviews revoke: window.prompt -> inline comment input.
+3. Campaign create form has no scope editor (scope API-only).
+4. Remediation rule form lacks a source filter (catch-all only).
+5. Report page: 'identities:none scored' missing a space.
+6. Sources list has no delete button (API-only by design; document).
+T2 CLOSED (same session, 2026-08-23): the v1 deferred list is fully
+landed - connectors, email queue+delivery, SoD, SCIM, remediation +
+enforcement, API keys, risk scoring, SIEM feed (live smoke: 200,
+application/x-ndjson, hash fields present). The final unverified leg
+was real SMTP delivery; closed by standing up a minimal asyncio SMTP
+sink on the host (workers connect to host.docker.internal:1025 per
+.env - creds there are dev placeholders), then retrying failed
+notify_owner actions #31/#32 from the UI: both completed on attempt
+4 and the sink received two real RFC822 emails with correct
+owner-routing, reviewer comments, and action references. Audit chain
+valid at 556 entries after. Design facts worth keeping: notify_owner
+without IAG_SMTP_HOST configured is a hard failure (ratified); empty
+host = email worker log-only; both senders are adaptive (plaintext
+fallback when the relay offers no STARTTLS, login skipped when no
+AUTH extension).
+NEXT: T3 polish (list above) -> T4 v0.1 release packaging. User's call.
+## Current status (2026-08-23, session 23: T3 UI polish pass)
+T3 items 1-4 DONE [V], test-first where a backend change was involved.
+All verified on the live stack (rebuild: `docker compose build
+iag-migrate iag-app-1 iag-app-2 iag-app-3 && docker compose up -d`;
+nginx serves the baked bundle from the iag_static volume).
+1. Connector config echo (item 1): GET /api/sources now returns
+   connector.config (non-secret echo; secret stays write-only via
+   has_secret). Red test first
+   (test_connector_block_echoes_config_not_secret), then
+   _connector_block change; test_syncs_api shape pin updated to
+   include 'config'. ConnectorPanel prefills all fields + interval
+   from the echo, so reopening no longer shows blanks and saving no
+   longer silently wipes config. Verified live on source #21: all 6
+   ldap fields prefilled [V]. NOTE: PUT is still replace-semantics
+   (not merge); with prefill the wipe path is closed, merge left as
+   deliberate non-goal for v0.1.
+2. Reviews revoke modal (item 2): window.prompt replaced with an
+   in-app modal (state + render); native-dialog limit gone.
+3. Campaign scope editor (item 3): CampaignDetail gets a Scope
+   summary card (all statuses) + ScopeEditor for draft/staged
+   (sources checkboxes, departments CSV, privileged-only,
+   unlinked-only). PUT round-trips name/mode/description/deadline
+   unchanged (PUT is replace-semantics - must send full body).
+   Verified live: created campaign 21, set scope
+   {data_source_ids:[21],departments:[Engineering],privileged_only:true}
+   via the UI form, read back exact match, deleted [V].
+4. Remediation rule source select (item 4): backend already had
+   data_source_id (validated FK); form got a source select + filters
+   column shows 'source #N'. Verified live: options list renders [V].
+Item 5 (report spacing) verified OK in session 22 (extraction
+artifact). Item 6 stays documented-no-delete (by design).
+Suite 268/268 [V] (was 267; +1 connector echo regression test).
+Frontend tsc + vite build clean; live bundle index-BsFyhieq.
+Also this tree: AuthProvider wrap in main.tsx + backend/scripts/
+e2e_admin.py (E2E helper from session 22) ride along in the commit.
+NEXT: T4 v0.1 release packaging. User's call.
+
 ## Current status (2026-08-22, session 21 close)
 
 FEATURE 6 COMPLETE (phases A-E shipped; Entra remains mock-tested by
@@ -178,6 +256,23 @@ pass, any remaining deferred-list entries, UI polish, release
 packaging (v0.1 tag + notes) - user's call on priority.
 
 ## Session log (newest first)
+### 2026-08-23 (session 22): T1 E2E browser pass + T2 deferred-list close
+- T1 COMPLETE: full UI spine walked in-browser as e2e_admin vs live
+  glauth stack - source -> connector config (live bind validation) ->
+  sync (3 accounts/4 entitlements) -> campaign #20 via UI (scope via
+  PUT) -> preview/stage/start -> decide (approve via UI; revokes via
+  API because Reviews.tsx uses window.prompt - polish item) ->
+  auto-complete 100% -> report + CSV + Print/PDF. Remediation rule
+  created/fired/deleted via UI.
+- T2 COMPLETE: deferred list fully landed; SIEM feed smoke (200,
+  x-ndjson). Final gap = live SMTP delivery: minimal asyncio sink on
+  host:1025, UI Retry of actions #31/#32 -> completed attempt 4,
+  sink received 2 real emails (owner routing, comment, action ref).
+  Chain valid 556 after. Scratch sink deleted after use.
+- Findings -> T3 polish list (6 items) recorded in Current status.
+- No code changes this session; data created: source #21, sync run
+  #21, campaign #20, reviews #50-52, rule e2e-browser-notify
+  (deleted), 2 delivered emails.
 ### 2026-08-22 (session 21): FEATURE 6 PHASE E (live proofs + 3 live-found product fixes) - FEATURE COMPLETE
 
 - Phase E plan: writable OpenLDAP (osixia 1.5.0, connectors profile,

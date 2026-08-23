@@ -158,9 +158,10 @@ def test_list_sources_has_connector_block(admin_client):
     items = admin_client.get("/api/sources").json()["items"]
     mine = [s for s in items if s["id"] == sid][0]
     c = mine["connector"]
-    assert set(c) == {"configured", "interval_minutes", "next_sync_at",
+    assert set(c) == {"configured", "config", "interval_minutes", "next_sync_at",
                       "has_secret", "last_run_status"}
     assert c["configured"] is False and c["last_run_status"] is None
+    assert c["config"] == {}
 
 
 def test_manual_sync_end_to_end_via_api(admin_client, worker_session, tmp_path):

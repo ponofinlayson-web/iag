@@ -394,6 +394,45 @@ def test_registry_shape():
             get_adapter(st)
 
 
+def test_connector_block_echoes_config_not_secret(admin_client, worker_session):
+    """GET /api/sources must echo the stored (non-secret) config so the UI
+    can prefill the connector panel - regression for the silent-wipe bug
+    where reopening the panel showed blanks and saving them wiped config."""
+    from app.models.identity import utcnow
+    from app.models.source import DataSource
+
+    r = admin_client.post("/api/sources", json={"name": "ECHO", "source_type": "ldap"})
+    assert r.status_code == 200, r.text
+    sid = r.json()["id"]
+
+    async def configure():
+        async with worker_session() as maker:
+            async with maker() as s:
+                src = await s.get(DataSource, sid)
+                src.connector_config = json.dumps({
+                    "url": "ldap://ldap.example.com:389",
+                    "base_dn": "dc=example,dc=com",
+                    "bind_dn": "cn=svc,dc=example,dc=com",
+                })
+                src.connector_secret = "supersecret"
+                await s.commit()
+
+    asyncio.run(configure())
+
+    r = admin_client.get("/api/sources")
+    assert r.status_code == 200, r.text
+    mine = next(s for s in r.json()["items"] if s["id"] == sid)
+    conn = mine["connector"]
+    assert conn["configured"] is True
+    assert conn["has_secret"] is True
+    assert conn["config"] == {
+        "url": "ldap://ldap.example.com:389",
+        "base_dn": "dc=example,dc=com",
+        "bind_dn": "cn=svc,dc=example,dc=com",
+    }
+    assert "secret" not in json.dumps(conn).lower().replace("has_secret", "")
+
+
 def test_worker_pass_through_real_registry(admin_client, worker_session):
     """Full run_pass with the DEFAULT fetch path (registry dispatch):
     a sql source configured against a real SQLite file syncs end-to-end."""

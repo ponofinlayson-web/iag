@@ -37,6 +37,9 @@ class ConnectorIn(BaseModel):
 def _connector_block(s: DataSource, last_run_status: str | None) -> dict:
     return {
         "configured": bool(s.connector_config),
+        # Non-secret config echo so the UI can prefill the connector
+        # panel; the secret stays write-only (has_secret only).
+        "config": json.loads(s.connector_config) if s.connector_config else {},
         "interval_minutes": s.sync_interval_minutes,
         "next_sync_at": s.next_sync_at.isoformat() if s.next_sync_at else None,
         "has_secret": bool(s.connector_secret),

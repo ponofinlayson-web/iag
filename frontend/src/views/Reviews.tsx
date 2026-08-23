@@ -9,6 +9,8 @@ export default function Reviews() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [revoke, setRevoke] = useState<{ ids: number[] } | null>(null);
+  const [comment, setComment] = useState("");
 
   function load() {
     api.reviews.queue().then(setQueue).catch((e) => setError(e.message));
@@ -24,15 +26,43 @@ export default function Reviews() {
     setSelected(next);
   }
 
-  async function submitOne(id: number, decision: "approve" | "revoke") {
-    const comments = decision === "revoke" ? window.prompt("Revocation comment (required):") ?? "" : undefined;
-    if (decision === "revoke" && !comments) {
+  function openRevoke(ids: number[]) {
+    setComment("");
+    setError("");
+    setRevoke({ ids });
+  }
+
+  async function confirmRevoke() {
+    if (!revoke) return;
+    const comments = comment.trim();
+    if (!comments) {
       setError("Revocation requires a comment");
       return;
     }
     try {
-      await api.reviews.submit(id, decision, comments || undefined);
-      setNotice(`Review #${id} ${decision}d`);
+      if (revoke.ids.length === 1) {
+        await api.reviews.submit(revoke.ids[0], "revoke", comments);
+        setNotice(`Review #${revoke.ids[0]} revoked`);
+      } else {
+        const r = await api.reviews.bulkSubmit(revoke.ids, "revoke", comments);
+        setNotice(`Bulk revoke: ${r.submitted} submitted`);
+      }
+      setRevoke(null);
+      setSelected(new Set());
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function submitOne(id: number, decision: "approve" | "revoke") {
+    if (decision === "revoke") {
+      openRevoke([id]);
+      return;
+    }
+    try {
+      await api.reviews.submit(id, "approve");
+      setNotice(`Review #${id} approved`);
       setSelected(new Set());
       load();
     } catch (e) {
@@ -42,14 +72,13 @@ export default function Reviews() {
 
   async function submitBulk(decision: "approve" | "revoke") {
     if (selected.size === 0) return;
-    const comments = decision === "revoke" ? window.prompt("Revocation comment (required):") ?? "" : undefined;
-    if (decision === "revoke" && !comments) {
-      setError("Revocation requires a comment");
+    if (decision === "revoke") {
+      openRevoke([...selected]);
       return;
     }
     try {
-      const r = await api.reviews.bulkSubmit([...selected], decision, comments || undefined);
-      setNotice(`Bulk ${decision}: ${r.submitted} submitted`);
+      const r = await api.reviews.bulkSubmit([...selected], "approve");
+      setNotice(`Bulk approve: ${r.submitted} submitted`);
       setSelected(new Set());
       load();
     } catch (e) {
@@ -87,6 +116,36 @@ export default function Reviews() {
             </tbody>
           </table>
         </Card>
+      )}
+      {revoke && (
+        <div className="modal-overlay" onClick={() => setRevoke(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>
+              {revoke.ids.length === 1
+                ? `Revoke review #${revoke.ids[0]}`
+                : `Revoke ${revoke.ids.length} reviews`}
+            </h3>
+            <p className="muted">
+              A comment is required so the decision and any remediation carry context.
+            </p>
+            <textarea
+              autoFocus
+              rows={3}
+              style={{ width: "100%" }}
+              placeholder="Why is this access being revoked?"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+            />
+            <div className="actions">
+              <button className="danger" onClick={() => void confirmRevoke()}>
+                Submit revocation
+              </button>
+              <button className="secondary" onClick={() => setRevoke(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

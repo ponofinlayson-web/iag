@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { ReviewQueueItem, ReviewHistoryItem } from "../api/client";
-import { Badge, Card, statusTone } from "../components/ui";
+import { Badge, Card, statusTone, Modal } from "../components/ui";
 
 export default function Reviews() {
   const [queue, setQueue] = useState<{ total: number; items: ReviewQueueItem[] } | null>(null);
@@ -118,34 +118,34 @@ export default function Reviews() {
         </Card>
       )}
       {revoke && (
-        <div className="modal-overlay" onClick={() => setRevoke(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>
-              {revoke.ids.length === 1
-                ? `Revoke review #${revoke.ids[0]}`
-                : `Revoke ${revoke.ids.length} reviews`}
-            </h3>
-            <p className="muted">
-              A comment is required so the decision and any remediation carry context.
-            </p>
-            <textarea
-              autoFocus
-              rows={3}
-              style={{ width: "100%" }}
-              placeholder="Why is this access being revoked?"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-            />
-            <div className="actions">
-              <button className="danger" onClick={() => void confirmRevoke()}>
-                Submit revocation
-              </button>
-              <button className="secondary" onClick={() => setRevoke(null)}>
-                Cancel
-              </button>
-            </div>
+        <Modal
+          title={
+            revoke.ids.length === 1
+              ? `Revoke review #${revoke.ids[0]}`
+              : `Revoke ${revoke.ids.length} reviews`
+          }
+          onClose={() => setRevoke(null)}
+        >
+          <p className="muted">
+            A comment is required so the decision and any remediation carry context.
+          </p>
+          <textarea
+            autoFocus
+            rows={3}
+            style={{ width: "100%" }}
+            placeholder="Why is this access being revoked?"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+          />
+          <div className="actions">
+            <button className="danger" onClick={() => void confirmRevoke()}>
+              Submit revocation
+            </button>
+            <button className="secondary" onClick={() => setRevoke(null)}>
+              Cancel
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { Account, Source, SyncRunView } from "../api/client";
-import { Badge, Card, privilegeTone, errMsg } from "../components/ui";
+import { Badge, Card, errMsg, Modal, privilegeTone, Typeahead, type TypeaheadItem } from "../components/ui";
+import { DataTable, type Column } from "../components/DataTable";
 
 interface PagedAcc {
   total: number;
@@ -17,6 +18,7 @@ export default function Sources() {
   const [selected, setSelected] = useState<number | null>(null);
   const [accounts, setAccounts] = useState<PagedAcc | null>(null);
   const [syncSource, setSyncSource] = useState<Source | null>(null);
+  const [creating, setCreating] = useState(false);
 
   async function loadSources() {
     try {
@@ -36,47 +38,99 @@ export default function Sources() {
     }
   }, [selected]);
 
+  const columns: Column<Source>[] = [
+    { key: "id", label: "ID", pinned: true, sortable: false, value: (s) => s.id },
+    {
+      key: "name",
+      label: "Name",
+      pinned: true,
+      filter: "text",
+      render: (s) => (
+        <a onClick={() => setSelected(s.id)} style={{ cursor: "pointer" }}>
+          {s.name}
+        </a>
+      ),
+    },
+    { key: "source_type", label: "Type", filter: "select" },
+    { key: "account_count", label: "Accounts", value: (s) => s.account_count },
+    { key: "unlinked_count", label: "Unlinked", value: (s) => s.unlinked_count },
+    {
+      key: "last_sync",
+      label: "Last sync",
+      filter: "select",
+      value: (s) => s.connector?.last_run_status ?? "never",
+      render: (s) =>
+        s.connector?.last_run_status ? (
+          <Badge tone={syncTone(s.connector.last_run_status)}>{s.connector.last_run_status}</Badge>
+        ) : (
+          <span className="muted">never</span>
+        ),
+    },
+    {
+      key: "connector",
+      label: "Connector",
+      filter: "select",
+      value: (s) =>
+        isConnector(s) ? (s.connector?.configured ? "configured" : "not configured") : "upload only",
+      render: (s) => connectorCell(s),
+    },
+    { key: "upload", label: "Upload", sortable: false, render: (s) => <UploadCell source={s} /> },
+    { key: "bulk", label: "Bulk link", sortable: false, render: (s) => <BulkCell source={s} /> },
+  ];
+
+  function isConnector(s: Source) {
+    return s.source_type === "ldap" || s.source_type === "entra" || s.source_type === "sql";
+  }
+
+  function connectorCell(s: Source) {
+    if (!isConnector(s)) return <span className="muted">upload only</span>;
+    return (
+      <>
+        {s.connector?.configured ? <Badge tone="ok">configured</Badge> : <Badge tone="neutral">not configured</Badge>}{" "}
+        <button className="secondary" onClick={() => setSyncSource(s)}>
+          Configure
+        </button>{" "}
+        <button className="secondary" onClick={() => void syncNow(s)} disabled={!s.connector?.configured}>
+          Sync now
+        </button>
+      </>
+    );
+  }
+
+  async function syncNow(s: Source) {
+    try {
+      const r = await api.sources.syncNow(s.id);
+      setNotice(`Sync run #${r.run_id} enqueued for ${s.name}`);
+      await loadSources();
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
+
   return (
     <div>
       {error && <p className="error-text">{error}</p>}
       {notice && <p className="ok-text">{notice}</p>}
-      <SourceForm onCreate={loadSources} setError={setError} setNotice={setNotice} />
+      <div className="row" style={{ marginBottom: 12 }}>
+        <button onClick={() => setCreating(true)}>Create source</button>
+      </div>
       <Card title="Sources">
         {!sources ? (
-          <p className="muted">Loading…</p>
+          <p className="muted">Loading.</p>
         ) : sources.length === 0 ? (
-          <p className="empty">No sources yet. Create one above, then upload a CSV snapshot or configure a connector.</p>
+          <p className="empty">No sources yet. Create one, then upload a CSV snapshot or configure a connector.</p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Accounts</th>
-                <th>Unlinked</th>
-                <th>Last sync</th>
-                <th>Connector</th>
-                <th>Upload</th>
-                <th>Bulk link</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sources.map((s) => (
-                <SourceRow
-                  key={s.id}
-                  source={s}
-                  reload={loadSources}
-                  setError={setError}
-                  setNotice={setNotice}
-                  onSelect={() => setSelected(s.id)}
-                  onConfigure={() => setSyncSource(s)}
-                />
-              ))}
-            </tbody>
-          </table>
+          <DataTable viewKey="sources" columns={columns} rows={sources} getRowKey={(s) => s.id} searchable />
         )}
       </Card>
+      {creating && (
+        <CreateSourceModal
+          onClose={() => setCreating(false)}
+          onCreated={loadSources}
+          setError={setError}
+          setNotice={setNotice}
+        />
+      )}
       {syncSource != null && (
         <ConnectorPanel
           source={syncSource}
@@ -87,7 +141,7 @@ export default function Sources() {
         />
       )}
       {selected != null && accounts && (
-        <Card title={`Accounts — source ${selected} (${accounts.total})`}>
+        <Card title={`Accounts - source ${selected} (${accounts.total})`}>
           <table>
             <thead>
               <tr>
@@ -106,7 +160,7 @@ export default function Sources() {
                     {a.privilege_level ? (
                       <Badge tone={privilegeTone(a.privilege_level)}>{a.privilege_level}</Badge>
                     ) : (
-                      "—"
+                      "-"
                     )}
                   </td>
                   <td>{a.identity_id != null ? `#${a.identity_id}` : <span className="muted">unlinked</span>}</td>
@@ -120,30 +174,55 @@ export default function Sources() {
   );
 }
 
-function SourceForm({ onCreate, setError, setNotice }: Msg & { onCreate: () => Promise<void> }) {
+function lookupIdentities(q: string): Promise<TypeaheadItem[]> {
+  return api.identities.list({ q, page_size: 10 }).then((p) =>
+    p.items.map((i) => ({
+      id: i.id,
+      label: [i.first_name, i.last_name].filter(Boolean).join(" ") || i.username || i.employee_id,
+      value: i.employee_id,
+      sub: i.employee_id + (i.department ? ` · ${i.department}` : ""),
+    })),
+  );
+}
+
+function CreateSourceModal({
+  onClose,
+  onCreated,
+  setError,
+  setNotice,
+}: Msg & { onClose: () => void; onCreated: () => Promise<void> }) {
   const [name, setName] = useState("");
   const [type, setType] = useState("csv");
-  const [owner, setOwner] = useState("");
+  const [owner, setOwner] = useState<TypeaheadItem | null>(null);
+  const [ownerText, setOwnerText] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function submit() {
     if (!name.trim()) return;
+    if (ownerText.trim() && !owner) return; // unmatched owner text is blocked inline
+    setBusy(true);
     try {
-      await api.sources.create({ name, source_type: type, owner_employee_id: owner || undefined });
+      await api.sources.create({
+        name,
+        source_type: type,
+        owner_employee_id: owner?.value,
+      });
       setNotice(`Source "${name}" created`);
-      setName("");
-      setOwner("");
-      await onCreate();
+      onClose();
+      await onCreated();
     } catch (e) {
       setError(errMsg(e));
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
-    <Card title="Create source">
+    <Modal title="Create source" onClose={onClose}>
       <div className="form-grid">
         <label>
           Name
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="App Directory" />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="App Directory" autoFocus />
         </label>
         <label>
           Type
@@ -156,103 +235,80 @@ function SourceForm({ onCreate, setError, setNotice }: Msg & { onCreate: () => P
           </select>
         </label>
         <label>
-          Owner employee ID
-          <input value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="E-ADMIN" />
+          Owner (optional)
+          <Typeahead
+            lookup={lookupIdentities}
+            onSelect={setOwner}
+            onTextChange={setOwnerText}
+            placeholder="Search name, username, or employee ID"
+          />
+          {ownerText.trim() && !owner && (
+            <span className="error-text">
+              Pick an owner from the list, or clear the field (unmatched IDs are rejected).
+            </span>
+          )}
         </label>
       </div>
-      <button onClick={() => void submit()}>Create</button>
-    </Card>
+      <p className="muted">The owner receives sync notices and review assignments for this source.</p>
+      <div className="actions">
+        <button onClick={() => void submit()} disabled={busy || !name.trim()}>
+          {busy ? "Creating." : "Create"}
+        </button>
+        <button className="secondary" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
   );
 }
 
-function SourceRow({
-  source,
-  reload,
-  setError,
-  setNotice,
-  onSelect,
-  onConfigure,
-}: Msg & { source: Source; reload: () => Promise<void>; onSelect: () => void; onConfigure: () => void }) {
+function UploadCell({ source }: { source: Source }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [lastMsg, setLastMsg] = useState("");
   async function upload() {
     const file = fileRef.current?.files?.[0];
-    if (!file) return;
+    if (!file) {
+      setLastMsg("Choose a file first");
+      return;
+    }
     try {
       const r = await api.sources.uploadCsv(source.id, file);
-      setNotice(`Uploaded to ${source.name}: ${r.accounts_created} accounts, ${r.entitlements_created} entitlements`);
-      await reload();
+      setLastMsg(`+${r.accounts_created} acc / +${r.entitlements_created} ent`);
     } catch (e) {
-      setError(errMsg(e));
+      setLastMsg(errMsg(e));
     }
   }
+  return (
+    <>
+      <input ref={fileRef} type="file" accept=".csv" />
+      <button className="secondary" onClick={() => void upload()}>
+        Upload
+      </button>
+      {lastMsg && <span className="muted"> {lastMsg}</span>}
+    </>
+  );
+}
+
+function BulkCell({ source }: { source: Source }) {
+  const [msg, setMsg] = useState("");
   async function bulkLink(match: "username" | "email") {
     try {
       const r = await api.sources.bulkLink(source.id, match);
-      setNotice(`Bulk linked ${r.linked}/${r.considered} by ${match}`);
-      await reload();
+      setMsg(`${r.linked}/${r.considered}`);
     } catch (e) {
-      setError(errMsg(e));
+      setMsg(errMsg(e));
     }
   }
-  async function syncNow() {
-    try {
-      const r = await api.sources.syncNow(source.id);
-      setNotice(`Sync run #${r.run_id} enqueued for ${source.name}`);
-      await reload();
-    } catch (e) {
-      setError(errMsg(e));
-    }
-  }
-  const conn = source.connector;
-  const isConnector = source.source_type === "ldap" || source.source_type === "entra" || source.source_type === "sql";
   return (
-    <tr>
-      <td>{source.id}</td>
-      <td>
-        <a onClick={onSelect} style={{ cursor: "pointer" }}>
-          {source.name}
-        </a>
-      </td>
-      <td>{source.source_type}</td>
-      <td>{source.account_count}</td>
-      <td>{source.unlinked_count}</td>
-      <td>
-        {conn?.last_run_status ? (
-          <Badge tone={syncTone(conn.last_run_status)}>{conn.last_run_status}</Badge>
-        ) : (
-          <span className="muted">never</span>
-        )}
-      </td>
-      <td>
-        {isConnector ? (
-          <>
-            {conn?.configured ? <Badge tone="ok">configured</Badge> : <Badge tone="neutral">not configured</Badge>}{" "}
-            <button className="secondary" onClick={onConfigure}>
-              Configure
-            </button>{" "}
-            <button className="secondary" onClick={() => void syncNow()} disabled={!conn?.configured}>
-              Sync now
-            </button>
-          </>
-        ) : (
-          <span className="muted">upload only</span>
-        )}
-      </td>
-      <td>
-        <input ref={fileRef} type="file" accept=".csv" />
-        <button className="secondary" onClick={() => void upload()}>
-          Upload
-        </button>
-      </td>
-      <td>
-        <button className="secondary" onClick={() => void bulkLink("username")}>
-          By username
-        </button>{" "}
-        <button className="secondary" onClick={() => void bulkLink("email")}>
-          By email
-        </button>
-      </td>
-    </tr>
+    <>
+      <button className="secondary" onClick={() => void bulkLink("username")}>
+        By username
+      </button>{" "}
+      <button className="secondary" onClick={() => void bulkLink("email")}>
+        By email
+      </button>
+      {msg && <span className="muted"> {msg}</span>}
+    </>
   );
 }
 
@@ -332,7 +388,7 @@ function ConnectorPanel({
   }
 
   return (
-    <Card title={`Connector — ${source.name} (${source.source_type})`}>
+    <Modal title={`Connector - ${source.name} (${source.source_type})`} onClose={onClose} wide>
       <div className="form-grid">
         {fields.map((f) => (
           <label key={f.key}>
@@ -362,17 +418,19 @@ function ConnectorPanel({
         Saving runs a live validation (bind / token / LIMIT 1 query) before anything is stored. The server stores the
         secret; it is never returned by the API.
       </p>
-      <button onClick={() => void save()} disabled={busy}>
-        {busy ? "Validating…" : "Validate & save"}
-      </button>{" "}
-      <button className="secondary" onClick={onClose}>
-        Cancel
-      </button>{" "}
-      <button className="secondary" onClick={() => setShowHistory(!showHistory)}>
-        {showHistory ? "Hide history" : "Run history"}
-      </button>
+      <div className="actions">
+        <button onClick={() => void save()} disabled={busy}>
+          {busy ? "Validating." : "Validate & save"}
+        </button>{" "}
+        <button className="secondary" onClick={onClose}>
+          Cancel
+        </button>{" "}
+        <button className="secondary" onClick={() => setShowHistory(!showHistory)}>
+          {showHistory ? "Hide history" : "Run history"}
+        </button>
+      </div>
       {showHistory && <RunHistory sourceId={source.id} setError={setError} />}
-    </Card>
+    </Modal>
   );
 }
 
@@ -397,9 +455,9 @@ function RunHistory({ sourceId, setError }: { sourceId: number; setError: (s: st
   }
 
   return (
-    <Card title={`Sync runs — source ${sourceId}`}>
+    <Card title={`Sync runs - source ${sourceId}`}>
       {!runs ? (
-        <p className="muted">Loading…</p>
+        <p className="muted">Loading.</p>
       ) : runs.length === 0 ? (
         <p className="empty">No sync runs yet.</p>
       ) : (
@@ -424,12 +482,12 @@ function RunHistory({ sourceId, setError }: { sourceId: number; setError: (s: st
                   <Badge tone={syncTone(r.status)}>{r.status}</Badge>
                 </td>
                 <td>{r.triggered_by}</td>
-                <td>{r.started_at ?? "—"}</td>
-                <td>{r.finished_at ?? "—"}</td>
+                <td>{r.started_at ?? "-"}</td>
+                <td>{r.finished_at ?? "-"}</td>
                 <td>
                   {r.stats
                     ? `+${r.stats.accounts_created ?? 0} acc / ${r.stats.entitlements_created ?? 0} ent / miss ${r.stats.missing_from_snapshot ?? 0}`
-                    : "—"}
+                    : "-"}
                 </td>
                 <td className="muted">{r.error ?? ""}</td>
                 <td>

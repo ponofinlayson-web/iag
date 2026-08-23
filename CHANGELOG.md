@@ -4,6 +4,61 @@ All notable changes to IAG are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/).
 
+## [0.2.0] - 2026-08-24
+
+UI Polish Pass 2: shared UI primitives, per-view conversions, and a jade
+theme retune. Backend additions: SoD manual evaluation.
+
+### Added
+
+**Shared UI primitives**
+- `Modal` component (Esc/backdrop close, focus trap with restore, wide
+  variant) replacing all hand-rolled overlays (API key reveal, SCIM token
+  reveal, review revocation).
+- `Typeahead` debounced autocomplete (keyboard nav, `value` field for
+  submit values distinct from display label).
+- `DataTable` primitive: per-column text/select filters, header sort,
+  global search with autocomplete chips, column show/hide + native
+  drag-to-reorder in a Columns popover (pinned `id`/`name` excluded),
+  sticky header + sticky first columns, per-view column prefs persisted
+  to localStorage.
+
+**Sources**
+- Create-source modal with owner `Typeahead` over real identities
+  (`GET /api/identities?q=`); unmatched owner text blocks submit with an
+  inline error instead of silently passing an unknown ID to the API.
+
+**Campaigns**
+- Create-campaign modal (name, mode, description, deadline).
+
+**SoD**
+- Manual rule evaluation: `POST /api/sod/rules/{id}/run` evaluates a rule
+  live across all identities, persists a `sod_evaluations` row with
+  violations as JSON evidence (hash-chained audit entry, same discipline
+  as every state change), and returns the violation list. Rules list now
+  surfaces last-run (violations count + timestamp).
+- SoD view: create-rule modal with debounced entitlement filtering; Run
+  button per rule with a violations result modal (identity, entitlement
+  pair, severity).
+
+**Identities**
+- Converted to `DataTable` (filters, sort, search chips) with active
+  status and source columns; CSV export retained.
+
+### Changed
+
+**Theme**
+- Accent retuned steel blue → jade (`--accent: #2fa87c` for text/links,
+  new `--accent-strong: #17805c` fill ramp for buttons), all pairs
+  WCAG-AA-validated against panel surfaces (white-on-fill 4.9, accent
+  text 5.3–6.3, muted 8.0, text AAA 15.3).
+- Buttons restyled as solid fills with distinct borders, hover/active
+  states, and focus-visible rings (previously bare text-link pills).
+- Table grid lines: visible column separators + row borders
+  (`--border` bumped to `#3a4450`), so tables read as grids.
+- Contrast bump: `--text` → `#eef1f5`, `--muted` → `#a8b1bd` (AAA on
+  panels); badge tones unchanged.
+
 ## [0.1.0] - 2026-08-23
 
 First release: complete clean-room rebuild of the IAG governance tool,

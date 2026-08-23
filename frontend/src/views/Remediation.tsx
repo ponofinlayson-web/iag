@@ -7,7 +7,7 @@ import type {
   ScimConfig,
 } from "../api/client";
 import { useAuth } from "../auth";
-import { Badge, Card, Empty, errMsg } from "../components/ui";
+import { Badge, Card, Empty, errMsg, Modal } from "../components/ui";
 
 const PRIVILEGES = ["low", "moderate", "high", "very_high"];
 const STATUSES = ["pending_approval", "approved", "executing", "completed", "failed", "cancelled"];
@@ -557,25 +557,22 @@ export default function Remediation() {
         )}
       </Card>
       {scimToken && (
-        <div className="modal-overlay" onClick={() => setScimToken(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Copy your SCIM token now</h3>
-            <p className="muted">
-              This is the only time the full token is shown. It is stored hashed and cannot be
-              recovered. Rotating replaces it (the old token stops working immediately). The
-              join key for provisioned users is whatever your IdP sends as{" "}
-              <code>externalId</code> - pick a stable one (UPN or employee number), not a
-              display name.
-            </p>
-            <p className="mono key-box">{scimToken}</p>
-            <div className="actions">
-              <button onClick={copyScimToken}>{scimCopied ? "Copied ✓" : "Copy"}</button>
-              <button className="secondary" onClick={() => setScimToken(null)}>
-                I stored it
-              </button>
-            </div>
+        <Modal title="Copy your SCIM token now" onClose={() => setScimToken(null)}>
+          <p className="muted">
+            This is the only time the full token is shown. It is stored hashed and cannot be
+            recovered. Rotating replaces it (the old token stops working immediately). The
+            join key for provisioned users is whatever your IdP sends as{" "}
+            <code>externalId</code> - pick a stable one (UPN or employee number), not a
+            display name.
+          </p>
+          <p className="mono key-box">{scimToken}</p>
+          <div className="actions">
+            <button onClick={copyScimToken}>{scimCopied ? "Copied ✓" : "Copy"}</button>
+            <button className="secondary" onClick={() => setScimToken(null)}>
+              I stored it
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

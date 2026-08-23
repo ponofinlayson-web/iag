@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { ApiKeyRow } from "../api/client";
-import { Badge, Card, Empty, errMsg } from "../components/ui";
+import { Badge, Card, Empty, errMsg, Modal } from "../components/ui";
 
 const KEY_ROLES = ["auditor", "report_viewer"];
 
@@ -171,22 +171,19 @@ export default function ApiKeys() {
         )}
       </Card>
       {reveal && (
-        <div className="modal-overlay" onClick={() => setReveal(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Copy your API key now</h3>
-            <p className="muted">
-              This is the only time the full key is shown. It is stored hashed and cannot be
-              recovered. Use it as <code>Authorization: Bearer …</code>.
-            </p>
-            <p className="mono key-box">{reveal}</p>
-            <div className="actions">
-              <button onClick={copyKey}>{copied ? "Copied ✓" : "Copy"}</button>
-              <button className="secondary" onClick={() => setReveal(null)}>
-                I stored it
-              </button>
-            </div>
+        <Modal title="Copy your API key now" onClose={() => setReveal(null)}>
+          <p className="muted">
+            This is the only time the full key is shown. It is stored hashed and cannot be
+            recovered. Use it as <code>Authorization: Bearer …</code>.
+          </p>
+          <p className="mono key-box">{reveal}</p>
+          <div className="actions">
+            <button onClick={copyKey}>{copied ? "Copied ✓" : "Copy"}</button>
+            <button className="secondary" onClick={() => setReveal(null)}>
+              I stored it
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -176,6 +176,35 @@ export interface SodRule {
   severity: string;
   is_active: boolean;
   created_at: string | null;
+  last_run?: SodRunInfo | null;
+}
+
+export interface SodRunInfo {
+  id: number;
+  run_id: string;
+  rule_id: number;
+  violation_count: number;
+  computed_at: string | null;
+}
+
+export interface SodRunViolation {
+  identity_id: number;
+  employee_id: string;
+  identity_name: string | null;
+  identity_department: string | null;
+  rule_id: number;
+  rule_name: string;
+  severity: string;
+  entitlement_a: string;
+  entitlement_b: string;
+}
+
+export interface SodRunResult {
+  run_id: string;
+  rule_id: number;
+  violation_count: number;
+  computed_at: string;
+  violations: SodRunViolation[];
 }
 
 export interface SodRuleInput {
@@ -646,6 +675,9 @@ export const api = {
       }),
     deleteRule: (id: number) =>
       request<{ ok: boolean }>(`/api/sod/rules/${id}`, { method: "DELETE" }),
+    runRule: (id: number) =>
+      request<SodRunResult>(`/api/sod/rules/${id}/run`, { method: "POST" }),
+    getRun: (runId: string) => request<SodRunResult>(`/api/sod/runs/${runId}`),
   },
   remediation: {
     rules: () =>

@@ -112,7 +112,10 @@ def _ldap_fetch_sync(config: dict, secret: str, timeout: float) -> SyncSnapshot:
         pages = 0
         while True:
             conn.search(
-                base, search_filter, attributes=["*"],
+                base, search_filter,
+                # memberOf (and friends) are operational attrs: '*' alone
+                # never returns them, and entitlement sync reads memberOf
+                attributes=["*", "memberOf"],
                 paged_size=LDAP_PAGE_SIZE, paged_cookie=cookie,
             )
             page_len = len(conn.entries)
@@ -157,7 +160,10 @@ def _ldap_validate(config: dict, secret: str) -> None:
         conn.search(
             base, "(objectClass=*)", attributes=["objectClass"], size_limit=1,
         )
-        if conn.result.get("result") != 0:
+        # result 4 (sizeLimitExceeded) is expected here: the probe asks
+        # for 1 entry on purpose, and real directories (unlike the test
+        # mock) report the truncation instead of silently returning 0.
+        if conn.result.get("result") not in (0, 4):
             raise ValueError(
                 f"ldap base search failed: {conn.result.get('description')}"
             )

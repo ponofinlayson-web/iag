@@ -1,0 +1,66 @@
+# Seed for the writable OpenLDAP enforcement-proof directory (compose
+# service iag-openldap, profile "connectors"). Feature-6 phase E live
+# proofs: connector sync reads memberOf (back-link, memberOf overlay),
+# enforcement writes the group's forward-link member attr.
+#
+# Throwaway proof credentials. The connector binds as cn=admin (rootdn)
+# - only the rootdn has write rights under the default ACLs, and
+# enforcement is the write path being proven. Groups are cn= under
+# ou=groups; users are inetOrgPerson under ou=people (uid = account_attr).
+dn: ou=people,dc=iagldap,dc=local
+objectClass: organizationalUnit
+ou: people
+
+dn: ou=groups,dc=iagldap,dc=local
+objectClass: organizationalUnit
+ou: groups
+
+dn: uid=lp-alice,ou=people,dc=iagldap,dc=local
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+uid: lp-alice
+cn: Alice Proof
+sn: Proof
+givenName: Alice
+mail: lp-alice@example.com
+userPassword: iag-ldap-proof-user
+
+dn: uid=lp-bob,ou=people,dc=iagldap,dc=local
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+uid: lp-bob
+cn: Bob Proof
+sn: Proof
+givenName: Bob
+mail: lp-bob@example.com
+userPassword: iag-ldap-proof-user
+
+dn: uid=lp-carol,ou=people,dc=iagldap,dc=local
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+uid: lp-carol
+cn: Carol Proof
+sn: Proof
+givenName: Carol
+mail: lp-carol@example.com
+userPassword: iag-ldap-proof-user
+
+# forward-link group; memberOf overlay computes the back-link
+dn: cn=Proof-Admins,ou=groups,dc=iagldap,dc=local
+objectClass: groupOfNames
+cn: Proof-Admins
+member: uid=lp-alice,ou=people,dc=iagldap,dc=local
+member: uid=lp-bob,ou=people,dc=iagldap,dc=local
+member: uid=lp-carol,ou=people,dc=iagldap,dc=local
+
+# target of the disable_account leg
+dn: cn=Proof-Vpn,ou=groups,dc=iagldap,dc=local
+objectClass: groupOfNames
+cn: Proof-Vpn
+member: uid=lp-bob,ou=people,dc=iagldap,dc=local

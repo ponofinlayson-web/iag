@@ -119,40 +119,92 @@ plain-English, task-shaped, troubleshooting). Tests: 14 new
 reads IAG_BOOTSTRAP_ADMIN_PASSWORD from env). All 3 replicas rebuilt
 healthy [V] (service names are iag-app-N in compose - `docker compose
 build iag-app-1 iag-app-2 iag-app-3`; `app-1` is not a service).
-## Current status (2026-08-22, session 20 close)
+## Current status (2026-08-22, session 21 close)
 
-Feature 6 Phase D COMPLETE (commit 5d80980): enforcement write-back
-engine shipped. app/core/enforcement.py — enforce_against_source()
-dispatches per-adapter arms {ldap, entra, sql}, sharing connectors.py
-infrastructure (write conn factory, entra client via _cx late-bind, SQL
-engine + admin statements with bound params). All arms idempotence-aware:
-clean-state check FIRST, "already clean" completes without a directory
-write (ldap reads the GROUP's forward-link member attr, not the user's
-memberOf back-link — back-links go stale after direct writes; entra
-checks the members set). csv/unknown types fail loud naming the type and
-REQUEUE (not dead-letter). remediation_worker.py _deliver_enforce +
-_DELIVERERS["enforce"] hook; unknown-type guard intact (test retargeted
-to carrier_pigeon since enforce now HAS an arm).
+FEATURE 6 COMPLETE (phases A-E shipped; Entra remains mock-tested by
+spec design - live proofs name glauth only).
 
-Tests: test_enforcement.py 17 E2E tests — rules fired through the real
-phase-C rules API, reviews via real campaign stage/start; ldap3 MOCK
-writeable server, httpx.MockTransport routed on request.url.path +
-DECODED url.params (raw query percent-encodes $ as %24 — str(url)
-substring checks never match), real SQLite file DBs. D6 interplay
-pinned: enforce rules default require_approval ON; fast-path tests use
-the documented opt-out, gated test keeps the default (claims 0 while
-pending_approval, delivers after approve). Feature-3 rules are
-cumulative — test helper deactivates prior enforce rules to keep
-one-revoke-one-action. Suite 265/265 [V] (247+18).
+Phase E (session 21, commit below): live proofs + 3 PRODUCT BUGS found
+by the live harness and fixed (this is what live proofs are for):
 
-Docs: admin-guide "not delivered yet" note replaced with delivered
-per-adapter behaviour; csv troubleshooting entry updated.
+1. `_ldap_validate` rejected every real directory: its size_limit=1
+   base probe got result 4 (sizeLimitExceeded) on any base with >1
+   entry and treated it as failure. glauth never surfaces it; osixia
+   OpenLDAP does. Fix: result in (0, 4) = reachable.
+2. LDAP fetch requested attributes=['*'] only - memberOf is an
+   OPERATIONAL attribute, never returned by '*' alone, so real
+   directories would mirror ZERO entitlements (mocks bypassed the
+   kwarg). Fix: attributes=['*', 'memberOf'].
+3. Audit chain forked under 3 replicas: append_audit's
+   with_for_update() head lock cannot serialize under READ COMMITTED
+   (loser's statement snapshot predates winner's commit -> re-reads
+   stale head). Live repro: entries 308/309 both prev=f760...  Fix:
+   pg_advisory_xact_lock (key 913731) before head lookup, PG-only,
+   no-op semantics on SQLite. Historical forked rows healed once via
+   in-container re-chain script (deleted after use).
 
-NEXT (fresh chat): Phase E per spec - live proofs (LDAP/Entra/SQL
-write-back against real deployments + live smoke extension), then
-feature-6 close-out per spec (final spec-vs-code sweep + E2E).
+Tests: 267/267 [V] (2 new regression tests pin the validate+fetch
+fixes; advisory lock verified live - chain valid at 475 entries with
+3 replicas racing).
+
+LIVE PROOFS ALL GREEN [V] (nginx 8090, rebuilt images):
+- scripts/live_enforce_check.py: LIVE ENFORCE CHECK PASS - osixia
+  OpenLDAP writable member delete + disable-attr flip + already-clean
+  idempotent seconds; SQL write-back leg on stack Postgres (planted
+  table, admin statement, bound params, 1 row affected); chain valid.
+  Overlay quirk: osixia memberOf overlay defaults
+  groupOfUniqueNames/uniqueMember; script repoints to
+  groupOfNames/member per-run (ephemeral config, no volume) before
+  bootstrap. Divergence from spec's glauth documented here.
+- scripts/live_scim_smoke.py + live_scim_admin_smoke.py: both PASS
+  (bearer gate, CRUD, PATCH depro shape, filter, rotate kills old
+  token, revoke 503s surface, chain valid, actor "scim" in feed).
+
+Spec-vs-code sweep (phase-E scope): every bullet in the spec's
+live-proof section maps to a passing script leg; SCIM surface covered
+by the phase-B/C smokes rerun post-fixes; admin-guide.md exists
+(phase C). REQUIREMENTS deferred-list "SCIM" + ARCHITECTURE slot line
+landed at ratification - nothing outstanding.
+
+Live-proof harness notes: script resets bob's disable attr via
+MODIFY_DELETE (empty-value REPLACE is schema-illegal);
+re-touch step re-adds members because groupOfNames requires >=1
+member; entitlement binding must happen BEFORE revoke submit
+(snapshot freezes at trigger).
+
+NEXT (fresh chat): feature-6 closed. Open per REQUIREMENTS
+deferred-list review + product backlog judgment: E2E browser test
+pass, any remaining deferred-list entries, UI polish, release
+packaging (v0.1 tag + notes) - user's call on priority.
 
 ## Session log (newest first)
+### 2026-08-22 (session 21): FEATURE 6 PHASE E (live proofs + 3 live-found product fixes) - FEATURE COMPLETE
+
+- Phase E plan: writable OpenLDAP (osixia 1.5.0, connectors profile,
+  deploy/enforce.ldif) since enforcement needs real writes; glauth is
+  read-only. Overlay repoint per-run: olcMemberOfGroupOC=groupOfNames,
+  olcMemberOfMemberAD=member (osixia defaults groupOfUniqueNames).
+- Commit (single): 3 product fixes + 2 regression tests + live harness
+  + compose/ldif + HANDOFF. Suite 267/267 [V]; full live rerun green.
+- Bugs (all found by live proof, all fixed test-first):
+  1. validate: sizeLimitExceeded (result 4) on real dirs = reachable,
+     not failure (test_ldap_validate_size_limit_is_success).
+  2. fetch: ['*'] omits operational attrs -> memberOf never mirrored
+     on real dirs (test_ldap_fetch_requests_operational_attributes
+     pins ['*','memberOf']).
+  3. audit append: pg_advisory_xact_lock(913731) before head lookup;
+     with_for_update alone forked chain under 3 replicas (READ
+     COMMITTED snapshot). Historical forks healed once in-container.
+- LIVE ENFORCE CHECK PASS [V]: member delete (bob out, alice intact),
+  disable-attr flip, both already-clean idempotent seconds, SQL
+  write-back leg (1 row, bound params), chain valid 475 entries.
+  SCIM smokes rerun post-fixes: both PASS.
+- Harness gotchas: disable-attr reset must MODIFY_DELETE (empty-value
+  REPLACE illegal); groupOfNames re-touch ADDs missing members first
+  (>=1 member required); bind entitlement BEFORE revoke (snapshot
+  freezes at trigger); harness re-created openldap after each docker
+  daemon crash (recreate, not restart).
+
 ### 2026-08-22 (session 20): FEATURE 6 PHASE D (enforcement write-back engine)
 
 - Commit 5d80980 (single commit: engine + worker hook + tests + docs).

@@ -105,6 +105,41 @@ def test_ldap_missing_base_dn_rejected():
         LdapAdapter().validate({"url": "ldap://x"}, "")
 
 
+def test_ldap_validate_size_limit_is_success(monkeypatch):
+    """Real directories answer a size-limited base probe with result 4
+    (sizeLimitExceeded); that proves reachability, not failure (found
+    live against osixia OpenLDAP 1.5.0 in the phase-E proof)."""
+    conn = _mock_ldap_entries()
+
+    def search(*args, **kwargs):
+        conn.result = {"result": 4, "description": "sizeLimitExceeded"}
+
+    conn.search = search
+    _patch_connect(monkeypatch, conn)
+    LdapAdapter().validate(LDAP_CFG, "pw")  # must not raise
+
+
+def test_ldap_fetch_requests_operational_attributes(monkeypatch):
+    """memberOf is an operational attr: '*' alone never returns it, so
+    real directories (OpenLDAP memberOf overlay, AD) would mirror zero
+    entitlements. Pin the requested attribute list (found live in the
+    phase-E proof)."""
+    requested = []
+    conn = _mock_ldap_entries()
+    real_search = conn.search
+
+    def spy(*args, **kwargs):
+        requested.append(kwargs.get("attributes"))
+        return real_search(*args, **kwargs)
+
+    conn.search = spy
+    _patch_connect(monkeypatch, conn)
+    asyncio.run(LdapAdapter().fetch(LDAP_CFG, "pw"))
+    assert requested, "fetch must issue searches"
+    for attrs in requested:
+        assert "*" in attrs and "memberOf" in attrs
+
+
 # --------------------------------------------------------------- Entra
 
 ENTRA_CFG = {"tenant_id": "t-1", "client_id": "c-1"}

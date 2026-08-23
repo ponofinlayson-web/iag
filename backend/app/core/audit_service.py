@@ -1,10 +1,16 @@
 """Audit service: appends hash-chained entries in the caller's transaction."""
 from __future__ import annotations
 from datetime import datetime, timezone
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.audit import GENESIS, AuditEntry, canonical_json, compute_record_hash
 from app.models.identity import utcnow
+# fixed key for pg_advisory_xact_lock: serializes chain appends across
+# replicas. with_for_update() alone cannot: under READ COMMITTED the
+# losing transaction's statement snapshot predates the winner's commit,
+# so it re-reads the stale head and forks the chain (found live with 3
+# replicas racing email_failed appends in the phase-E proof).
+_APPEND_LOCK_KEY = 913731
 def _iso_ts(dt: datetime) -> str:
     """DB columns are timezone-naive; timestamps written as UTC must hash
     identically before and after a round-trip, so coerce naive -> UTC."""
@@ -37,6 +43,12 @@ async def append_audit(
     # an unflushed prior append in this transaction would be skipped and the
     # chain would fork. flush() is not commit(); atomicity is preserved.
     await db.flush()
+    # Serialize appenders FIRST (advisory lock, PG-only): the row lock
+    # below then sees the winner committed. On SQLite (tests) the
+    # single-writer model already serializes; keep the row lock anyway.
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        await db.execute(text("SELECT pg_advisory_xact_lock(:k)"),
+                         {"k": _APPEND_LOCK_KEY})
     # Lock the chain head: concurrent appenders (worker replicas, parallel
     # requests) must serialize or the chain forks. No-op on SQLite.
     last = (

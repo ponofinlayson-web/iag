@@ -116,6 +116,28 @@ services:
     restart: unless-stopped
     logging: *logopts
 
+  iag-openldap:
+    # writable LDAP directory for live ENFORCEMENT write-back proofs
+    # (feature 6 phase E). glauth is read-only (config backend rejects
+    # every MODIFY with result 50 insufficientAccessRights) and its
+    # groups carry no forward-link member attr, so it cannot receive
+    # enforcement writes. memberOf overlay keeps the sync side
+    # (back-link reads) live-computed. Profile "connectors" alongside
+    # glauth; never started by the default stack.
+    image: osixia/openldap:1.5.0
+    container_name: iag-openldap
+    profiles: ["connectors"]
+    environment:
+      LDAP_ORGANISATION: "IAG Proof"
+      LDAP_DOMAIN: "iagldap.local"
+      LDAP_ADMIN_PASSWORD: "iag-ldap-proof-admin"
+      LDAP_BASE_DN: "dc=iagldap,dc=local"
+      LDAP_SEED_INTERNAL_LDIF_PATH: "/seed/enforce.ldif"
+    volumes:
+      - ./deploy/enforce.ldif:/seed/enforce.ldif:ro
+    restart: unless-stopped
+    logging: *logopts
+
 volumes:
   iag_pgdata:
   iag_static:

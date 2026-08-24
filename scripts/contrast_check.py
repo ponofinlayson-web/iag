@@ -1,4 +1,6 @@
 """WCAG contrast ratios for the jade accent candidates vs real panel colors."""
+import sys
+
 def lum(hexcolor: str) -> float:
     r, g, b = (int(hexcolor[i:i+2], 16) / 255 for i in (0, 2, 4))
     def adj(c):
@@ -63,3 +65,54 @@ for hx in ["17805c", "16855a", "168a5e", "148556", "127a52", "107049", "0f6844",
 print("\n== accent text on panel-2 (rows hover bg) ==")
 print(f"  2fa87c on panel-2: {ratio('2fa87c', PANEL2):.2f}")
 print(f"  2fa87c on bg: {ratio('2fa87c', BG):.2f}")
+
+# ---------------------------------------------------------------- light theme
+# Feature 7 D3: the light palette must meet the same bar the dark theme
+# meets - AA everywhere, text/muted AAA on panel + panel-2.
+L = {
+    "bg": "f5f7f9", "panel": "ffffff", "panel2": "eef2f6", "border": "d3dae2",
+    "text": "1a2129", "muted": "47525f", "accent": "1b7450", "accent_strong": "17805c",
+    "ok": "277044", "warn": "825d14", "bad": "b23a3a", "info": "28659a",
+}
+fails = 0
+
+def check(name: str, fg: str, bg: str, minimum: float) -> None:
+    global fails
+    r = ratio(fg, bg)
+    ok = r >= minimum
+    if not ok:
+        fails += 1
+    print(f"  [{'OK' if ok else 'FAIL'}] {name}: {r:.2f} (need {minimum})")
+
+print("\n== LIGHT THEME: text/muted AAA (7.0) on panel + panel-2 ==")
+check("text on panel", L["text"], L["panel"], 7.0)
+check("text on panel-2", L["text"], L["panel2"], 7.0)
+check("muted on panel", L["muted"], L["panel"], 7.0)
+check("muted on panel-2", L["muted"], L["panel2"], 7.0)
+check("muted on bg", L["muted"], L["bg"], 7.0)
+
+print("== LIGHT THEME: accent/tones AA (4.5) on surfaces ==")
+for tone in ("accent", "ok", "warn", "bad", "info"):
+    check(f"{tone} on panel", L[tone], L["panel"], 4.5)
+    check(f"{tone} on panel-2", L[tone], L["panel2"], 4.5)
+    check(f"{tone} on bg", L[tone], L["bg"], 4.5)
+check("accent-soft fill vs panel (non-text 3.0)", "1d7a55", L["panel"], 3.0)
+
+print("== LIGHT THEME: white on accent-strong buttons (AA 4.5) ==")
+for fill in ("17805c", "127a52", "107049", "0f6844"):
+    check(f"white on {fill}", "ffffff", fill, 4.5)
+
+print("== LIGHT THEME: badge tones on their 15% tint over panel (AA 4.5) ==")
+for tone in ("accent", "ok", "warn", "bad", "info", "muted"):
+    hx = L[tone]
+    comp = composite(hx, 0.15, L["panel"])
+    check(f"{tone} badge on tint", hx, comp, 4.5)
+
+print("== LIGHT THEME: border vs panel (informational - decorative, like dark) ==")
+# Borders are not the sole affordance anywhere (bg separation + focus rings
+# carry identification); the dark theme ships 1.75 for the same token, so
+# light matches that established bar rather than the 3.0 text-adjacent one.
+print(f"  border on panel: {ratio(L['border'], L['panel']):.2f} (informational)")
+
+print(f"\nLIGHT THEME RESULT: {'PASS' if fails == 0 else f'{fails} FAILURES'}")
+sys.exit(1 if fails else 0)

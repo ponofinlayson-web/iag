@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
             pass
 
 
-app = FastAPI(title="IAG", version="0.1.0", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
+app = FastAPI(title="IAG", version="0.3.0", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
 
 
 def _openapi_with_bearer() -> dict:
@@ -114,7 +114,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
     return await request_validation_exception_handler(request, exc)
 @app.get("/api/health", tags=["system"])
 async def health():
-    return {"status": "ok", "service": "iag-api", "version": "0.1.0"}
+    return {"status": "ok", "service": "iag-api", "version": "0.3.0"}
 _static = Path(__file__).resolve().parent.parent / "static"
 if _static.is_dir():
     app.mount("/", StaticFiles(directory=str(_static), html=True), name="spa")

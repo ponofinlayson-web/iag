@@ -117,7 +117,8 @@ tested, not assumed).
 
 ## Status
 
-v0.1.0. Feature-complete first release: all core domains implemented,
+v0.3.0. Feature-complete first release: all core domains implemented,
 backend suite green (pytest on SQLite), fault-tolerance and live-connector
 proofs run against real containers (LDAP bind, sync, enforcement write-back,
-SMTP delivery, SIEM feed).
+SMTP delivery, SIEM feed). v0.3.0 adds in-app user administration
+(system_admin) and a validated light/dark theme system.

@@ -4,6 +4,75 @@ All notable changes to IAG are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/).
 
+## [0.3.0] - 2026-08-24
+
+Feature 7: RBAC user management and the theme system (light/dark with
+accent dispersion). Users are administered in-app by system_admins;
+the UI gains a validated light palette and a deliberate accent
+hierarchy (identity + state, not decoration).
+
+### Added
+
+**User management (backend, system_admin)**
+- `GET /api/users` - list with role, status, lock state, `last_login`
+  from the most recent login audit row, and failure counts.
+- `POST /api/users` - create a login account on an existing identity
+  (admin-set password, `must_change_password` enforced; rejects
+  identities that already have a user).
+- `PUT /api/users/{id}/role` - change role; applies on the user next
+  request (fresh DB role read), no re-login required.
+- `PUT /api/users/{id}/status` - deactivate/reactivate. Users are
+  never deleted, so the audit trail keeps referential integrity;
+  deactivated users are rejected at login.
+- `PUT /api/users/{id}/unlock` - clear lockout (failed-attempt counter
+  and `locked_until`).
+- `PUT /api/users/{id}/reset-password` - admin-set replacement with
+  `must_change_password`.
+- Self-guards: an admin cannot change their own role or deactivate
+  their own account (409).
+- All mutations audit-chained (`user_created`, `user_role_changed`,
+  `user_status_changed`, `user_unlocked`, `user_password_reset`).
+
+**Users view**
+- DataTable over the user list: role/status badges, must-change and
+  failure columns, last login, per-row actions (role, unlock when
+  locked, deactivate/reactivate, reset password) with self-guards
+  mirrored client-side as disabled buttons.
+- Add-user modal with identity `Typeahead`, role picker, and
+  generated-or-typed initial password (min 8).
+- Reset/create passwords are revealed exactly once in a copy-now
+  modal; never logged, never re-fetchable.
+
+**Theme system**
+- Light/dark themes via `data-theme` on `:root` with a pre-paint
+  inline script in `index.html`: explicit choice (localStorage) wins;
+  first visit follows the OS `prefers-color-scheme`; dark default.
+  No flash of wrong theme on load.
+- Sun/moon toggle in the top bar; choice is sticky across sessions.
+- New tokens: `--accent-soft`, `--info`, `--overlay`; badge tints are
+  token-derived (`color-mix`) so both themes stay in palette.
+
+**Accent dispersion + stat semantics**
+- Accent carries identity and state only: nav active link, card title
+  bar, sorted-column indicator, active filter chips, admin/role
+  badges. Buttons stay jade-filled; a `ghost` variant added for
+  tertiary actions.
+- `Stat` gains `ok`/`warn`/`bad` tones; Dashboard (unlinked/privileged
+  pending = warn, active campaigns = ok) and Risk (critical = bad,
+  high = warn, low = ok) now color by meaning.
+- `Badge` gains `info` (source type, SCIM status) and `accent`
+  (system_admin) tones.
+
+### Changed
+- `scripts/contrast_check.py` now validates the light palette with the
+  same bar as dark (AA text, AAA text/muted on panels, badge-on-tint
+  AA) and exits nonzero on failure. Light palette tuned to pass:
+  muted `#47525f`, accent `#1b7450`, ok `#277044`, warn `#825d14`,
+  info `#28659a`.
+- Version markers unified at 0.3.0 (`pyproject.toml`,
+  `package.json`, FastAPI app + `/api/health`; the latter two were a
+  stale 0.1.0).
+
 ## [0.2.0] - 2026-08-24
 
 UI Polish Pass 2: shared UI primitives, per-view conversions, and a jade

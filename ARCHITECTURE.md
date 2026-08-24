@@ -1,4 +1,4 @@
-# IAG ΓÇö Architecture (v2)
+# IAG — Architecture (v2)
 Clean-room rebuild. The stack is chosen for what the domain demands:
 transactional audit integrity, a relational entitlement graph, and a
 fault-tolerant deployment topology the user can actually run.

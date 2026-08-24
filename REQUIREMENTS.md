@@ -1,4 +1,4 @@
-# IAG ΓÇö Requirements (v2 rebuild)
+# IAG — Requirements (v2 rebuild)
 Derived from a forensic read of the original IAM-Simplified project.
 No code was carried over; only behavior, data semantics, and invariants.
 ## 1. Product statement

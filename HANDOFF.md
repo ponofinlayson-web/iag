@@ -91,6 +91,61 @@ backend/tests/test_audit_tamper.py — raw-SQL mutation must break chain
 backend/pyproject.toml — deps + pytest config (pythonpath=["."])
 uv.lock + .venv exist — `uv sync` completed successfully [V]
 
+## Current status (2026-08-24, session 26 close) — T5 PASS
+E2E browser pass over Feature-7 surfaces. Session opened on a stale
+stack serving 0.1.0 — all images rebuilt (incl. migrate container),
+`docker compose ps` clean, /api/health reports 0.3.0 [V]. e2e_admin
+(id=2) reset via backend/scripts/e2e_admin.py (pw `e2e-browser-25`),
+then promoted certification_admin → system_admin through the real
+users API (audit-chained). All items below [V] unless noted:
+- Non-admin leg (cert_admin): no Users nav; direct /users → clean 403
+  naming system_admin; Users nav appears after promotion with NO
+  re-login (guards re-read the DB row per request)
+- Users CRUD: Add-user modal (Typeahead excludes identities that
+  already have users; native role select; Generate = 14-char); create
+  t5_browser → reveal-once password modal (Copy/Done); deactivate and
+  reactivate instant; 10 bad logins → locked badge + failures=10 +
+  Unlock button → unlock resets failures to 0; reset pw → second
+  reveal-once modal; then logging in AS t5_browser with the admin-reset
+  password succeeds — reset flow proven end-to-end; own-row guards
+  hold (Role disabled, Deactivate disabled while own account active;
+  clicking them does nothing, no modal)
+- Tooling limit (same class as session 22): the browser tool cannot
+  open native <select> options, so the role-change VALUE was exercised
+  via the same PUT endpoint through the API (that is how e2e_admin was
+  promoted); the role modal itself verified in-UI. Not a product gap.
+- Theme: toggle reactive (no reload — element indices stable across
+  the toggle); choice sticky in localStorage (iag.theme); pre-paint
+  script confirmed present in the SERVED index.html (flash-of-wrong-
+  theme impossible); hard reload honors the stored choice even on a
+  light-OS host. Icon shows the switch TARGET (Layout.tsx L51), not
+  the current theme.
+- Accents: nav active (.navlink.active = accent + accent-soft);
+  sorted-column indicator (▲ on Username sort); filter chips (the
+  Identities "Search table." — suggestion click commits a chip, ×
+  removes it; chips exist on Identities/Sources/Campaigns/SoD, not
+  Users — by design); role badges incl system_admin
+- Stat tones: Dashboard warn (unlinked 13, privileged 13) + ok
+  (campaigns 5, pending 0) — both branches live; Risk bands critical/
+  medium/low (no high rows — data, not a defect). Both themes
+  screenshotted: users table, dashboard, risk, chips, login screen.
+Findings (non-blocking, no code changed):
+1. A reviewer direct-navigating /risk sees the page shell + a small
+   "Insufficient role" notice + "No snapshots" empty state. Backend is
+   correct (reviewer is not in the ReportViewer gate, deps.py L104;
+   nav correctly omits Risk). Cosmetic leak of the shell only — same
+   pattern as the /users 403 page. Future polish: hide shell on 403.
+2. must_change_password has no self-service UI: endpoint
+   POST /api/auth/change-password exists but nothing surfaces it and
+   login does not force a redirect. t5_browser simply keeps using the
+   admin-reset password. Candidate for a future feature; outside
+   Feature-7 scope.
+DB deltas (e2e dataset, acceptable residue): e2e_admin promoted;
+identity 15 (E-T5-01 / t5_browser) + its login user (reviewer)
+created; one lockout + unlock cycle; two password resets. admin id=1
+untouched. Tree clean @ 59ad56c; no commits this session (ops/E2E).
+
+
 ## Current status (2026-08-24, session 25 close) — FEATURE 7 DONE, v0.3.0 TAGGED
 
 Feature 7 (RBAC users + themes) COMPLETE, committed, pushed, tagged.
@@ -108,17 +163,6 @@ to proper UTF-8. One commit message deep in history (de5561a) still
 carries it — user ruled: leave it, no rewrite.
 
 ### NEXT (in order), fresh chat each:
-
-T5 — E2E browser pass over Feature-7 surfaces. Walk as e2e_admin:
-Users CRUD (create via Typeahead + reveal-once password modal, role
-change, unlock, deactivate; self-guards disable own-row buttons),
-theme toggle (both themes render, choice sticky, no reload, no
-flash-of-wrong-theme on hard reload), accent spots (nav active,
-sorted column, filter chips, system_admin badge), stat tones
-(Dashboard/Risk), login screen unauthenticated. Also verify as
-non-admin: no Users nav item, direct /users route blocked. Method
-is session 22 (project MEMORY.md): real browser, live stack, API for
-what the UI lacks (none expected here).
 
 T6 — v0.3.0 release packaging à la v0.1.0 (session 24 recipe).
 README/CHANGELOG already current at 0.3.0 — remaining: .env.example

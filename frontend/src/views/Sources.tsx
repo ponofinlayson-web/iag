@@ -51,7 +51,7 @@ export default function Sources() {
         </a>
       ),
     },
-    { key: "source_type", label: "Type", filter: "select" },
+    { key: "source_type", label: "Type", filter: "select", render: (s) => <Badge tone="info">{s.source_type}</Badge> },
     { key: "account_count", label: "Accounts", value: (s) => s.account_count },
     { key: "unlinked_count", label: "Unlinked", value: (s) => s.unlinked_count },
     {

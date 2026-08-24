@@ -214,16 +214,18 @@ export function Card({ title, children }: { title?: string; children: ReactNode 
   );
 }
 
-export function Stat({ label, value }: { label: string; value: ReactNode }) {
+export function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: "ok" | "warn" | "bad" }) {
   return (
     <div className="stat">
-      <div className="stat-value">{value}</div>
+      <div className={"stat-value" + (tone ? ` stat-value-${tone}` : "")}>{value}</div>
       <div className="stat-label">{label}</div>
     </div>
   );
 }
 
-export function Badge({ tone, children }: { tone: "ok" | "warn" | "bad" | "neutral"; children: ReactNode }) {
+export type BadgeTone = "ok" | "warn" | "bad" | "neutral" | "info" | "accent";
+
+export function Badge({ tone, children }: { tone: BadgeTone; children: ReactNode }) {
   return <span className={`badge badge-${tone}`}>{children}</span>;
 }
 

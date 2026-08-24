@@ -6,6 +6,7 @@
   --text: #eef1f5;
   --muted: #a8b1bd;
   --accent: #2fa87c;          /* jade: links/text on dark surfaces (AA 5.3+) */
+  --accent-soft: rgba(47, 168, 124, 0.16);
   --accent-strong: #17805c;   /* jade fill: white label AA 4.9 */
   --accent-strong-hover: #127a52;
   --accent-strong-active: #107049;
@@ -13,7 +14,31 @@
   --ok: #3fa66c;
   --warn: #d0a03c;
   --bad: #d05c5c;
+  --info: #5c9bd0;
+  --overlay: rgba(0, 0, 0, 0.55);
   font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+/* Light theme: same tokens, daylight values. Palette validated in
+   scripts/contrast_check.py (AA text/muted AAA on panel + panel-2). */
+:root[data-theme="light"] {
+  --bg: #f5f7f9;
+  --panel: #ffffff;
+  --panel-2: #eef2f6;
+  --border: #d3dae2;
+  --text: #1a2129;
+  --muted: #47525f;
+  --accent: #1b7450;
+  --accent-soft: rgba(27, 116, 80, 0.12);
+  --accent-strong: #17805c;
+  --accent-strong-hover: #127a52;
+  --accent-strong-active: #107049;
+  --accent-border: #0f6844;
+  --ok: #277044;
+  --warn: #825d14;
+  --bad: #b23a3a;
+  --info: #28659a;
+  --overlay: rgba(15, 18, 22, 0.35);
 }
 
 * { box-sizing: border-box; }
@@ -33,7 +58,7 @@ a { color: var(--accent); }
   text-decoration: none; font-size: 14px;
 }
 .navlink:hover { color: var(--text); background: var(--panel-2); }
-.navlink.active { color: var(--text); background: var(--panel-2); font-weight: 600; }
+.navlink.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 .userbox { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 13px; }
 
 main { flex: 1; padding: 24px; max-width: 1200px; margin: 0 auto; width: 100%; }
@@ -46,7 +71,11 @@ main { flex: 1; padding: 24px; max-width: 1200px; margin: 0 auto; width: 100%; }
   background: var(--panel); border: 1px solid var(--border);
   border-radius: 10px; padding: 20px; margin-bottom: 20px;
 }
-.card h2 { margin: 0 0 12px; font-size: 16px; color: var(--text); }
+/* Page identity: one rule, whole app - every card title carries the accent. */
+.card h2 {
+  margin: 0 0 12px; font-size: 16px; color: var(--text);
+  padding-left: 10px; border-left: 3px solid var(--accent);
+}
 
 .stat-row { display: flex; gap: 16px; flex-wrap: wrap; }
 .stat {
@@ -54,6 +83,9 @@ main { flex: 1; padding: 24px; max-width: 1200px; margin: 0 auto; width: 100%; }
   border-radius: 8px; padding: 14px 18px; min-width: 140px;
 }
 .stat-value { font-size: 26px; font-weight: 700; }
+.stat-value-ok { color: var(--ok); }
+.stat-value-warn { color: var(--warn); }
+.stat-value-bad { color: var(--bad); }
 .stat-label { color: var(--muted); font-size: 12px; margin-top: 4px; }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -70,10 +102,12 @@ tr:hover td { background: var(--panel-2); }
   display: inline-block; padding: 2px 8px; border-radius: 10px;
   font-size: 11px; font-weight: 600;
 }
-.badge-ok { background: rgba(63, 166, 108, 0.15); color: var(--ok); }
-.badge-warn { background: rgba(208, 160, 60, 0.15); color: var(--warn); }
-.badge-bad { background: rgba(208, 92, 92, 0.15); color: var(--bad); }
-.badge-neutral { background: rgba(154, 163, 176, 0.15); color: var(--muted); }
+.badge-ok { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+.badge-warn { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+.badge-bad { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
+.badge-neutral { background: color-mix(in srgb, var(--muted) 15%, transparent); color: var(--muted); }
+.badge-info { background: color-mix(in srgb, var(--info) 15%, transparent); color: var(--info); }
+.badge-accent { background: var(--accent-soft); color: var(--accent); }
 
 button {
   background: var(--accent-strong); color: #fff;
@@ -90,8 +124,15 @@ button.secondary {
 }
 button.secondary:hover:not(:disabled) { background: var(--panel-2); border-color: var(--muted); }
 button.secondary:active:not(:disabled) { background: var(--border); }
+/* Ghost: tertiary actions and text links styled as buttons (Cancel,
+   Export links). Transparent until hovered, never fights the primary. */
+button.ghost {
+  background: transparent; color: var(--text); border: 1px solid var(--border);
+  font-weight: 500;
+}
+button.ghost:hover:not(:disabled) { background: var(--panel-2); border-color: var(--muted); }
 button.danger { background: var(--panel-2); color: var(--bad); border: 1px solid var(--bad); }
-button.danger:hover:not(:disabled) { background: rgba(208, 92, 92, 0.15); }
+button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 15%, transparent); }
 
 input, select, textarea {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
@@ -127,7 +168,7 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
 .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; }
 
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55);
+  position: fixed; inset: 0; background: var(--overlay);
   display: flex; align-items: center; justify-content: center; z-index: 50;
 }
 .modal {
@@ -162,7 +203,8 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
 .dt-search input { min-width: 200px; }
 .dt-chip {
   display: inline-flex; align-items: center; gap: 4px;
-  background: var(--panel-2); border: 1px solid var(--border);
+  background: var(--accent-soft); border: 1px solid var(--accent-border);
+  color: var(--accent);
   border-radius: 12px; padding: 2px 4px 2px 10px; font-size: 12px;
 }
 .dt-chip-x {
@@ -201,6 +243,8 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
   letter-spacing: 0.5px; font-weight: 600; cursor: pointer; text-align: left;
 }
 .dt-table .dt-sort:hover { color: var(--text); filter: none; }
+/* Sorted column: the indicator carries the accent, label keeps hierarchy. */
+.dt-table .dt-sort.sorted { color: var(--accent); }
 .dt-filter-row th { padding: 4px 10px; }
 .dt-filter-row input, .dt-filter-row select {
   width: 100%; padding: 4px 8px; font-size: 12px;

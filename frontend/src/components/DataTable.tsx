@@ -308,7 +308,7 @@ export function DataTable<T>({
                     c.label
                     ) : (
                       <button
-                        className="dt-sort"
+                        className={"dt-sort" + (sortKey === c.key ? " sorted" : "")}
                         onClick={() => toggleSort(c.key)}
                         title={`Sort by ${c.label}`}
                       >

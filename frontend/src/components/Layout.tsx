@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth";
+import { currentTheme, toggleTheme } from "../theme";
 
 interface NavItem {
   to: string;
@@ -16,7 +18,8 @@ const NAV: NavItem[] = [
   { to: "/risk", label: "Risk", roles: ["system_admin", "certification_admin", "auditor", "report_viewer"] },
   { to: "/sod", label: "SoD Rules", roles: ["system_admin", "certification_admin"] },
   { to: "/remediation", label: "Remediation", roles: ["system_admin", "certification_admin"] },
-{ to: "/api-keys", label: "API Keys", roles: ["system_admin"] },
+  { to: "/api-keys", label: "API Keys", roles: ["system_admin"] },
+  { to: "/users", label: "Users", roles: ["system_admin"] },
   { to: "/outbox", label: "Reminders", roles: ["system_admin", "certification_admin"] },
   { to: "/reviews", label: "Reviews", roles: ["system_admin", "certification_admin", "reviewer"] },
   { to: "/audit", label: "Audit", roles: ["system_admin", "certification_admin", "auditor"] },
@@ -24,6 +27,7 @@ const NAV: NavItem[] = [
 
 export default function Layout() {
   const { me, logout } = useAuth();
+  const [light, setLight] = useState(currentTheme() === "light");
   return (
     <div className="shell">
       <header className="topbar">
@@ -38,6 +42,14 @@ export default function Layout() {
         <div className="userbox">
           {me && (
             <>
+              <button
+                className="secondary theme-toggle"
+                aria-label={light ? "Switch to dark theme" : "Switch to light theme"}
+                title={light ? "Switch to dark theme" : "Switch to light theme"}
+                onClick={() => setLight(toggleTheme() === "light")}
+              >
+                {light ? "🌙" : "☀"}
+              </button>
               <span>
                 {me.username} · {me.role}
               </span>

@@ -23,14 +23,14 @@ export default function Dashboard() {
         <div className="stat-row">
           <Stat label="Identities" value={data.identities} />
           <Stat label="Accounts" value={data.accounts} />
-          <Stat label="Unlinked accounts" value={data.unlinked_accounts} />
-          <Stat label="Privileged accounts" value={data.privileged_accounts} />
-          <Stat label="Active campaigns" value={data.active_campaigns} />
+          <Stat label="Unlinked accounts" value={data.unlinked_accounts} tone={data.unlinked_accounts > 0 ? "warn" : undefined} />
+          <Stat label="Privileged accounts" value={data.privileged_accounts} tone={data.privileged_accounts > 0 ? "warn" : undefined} />
+          <Stat label="Active campaigns" value={data.active_campaigns} tone={data.active_campaigns > 0 ? "ok" : undefined} />
         </div>
       </Card>
       <Card title="My workload">
         <div className="stat-row">
-          <Stat label="Pending reviews" value={data.my_pending_reviews} />
+          <Stat label="Pending reviews" value={data.my_pending_reviews} tone={data.my_pending_reviews > 0 ? "warn" : "ok"} />
         </div>
       </Card>
     </div>

@@ -13,6 +13,7 @@ import Audit from "./views/Audit";
 import SodRules from "./views/SodRules";
 import Remediation from "./views/Remediation";
 import ApiKeys from "./views/ApiKeys";
+import Users from "./views/Users";
 import Outbox from "./views/Outbox";
 import Risk from "./views/Risk";
 import CampaignReport from "./views/CampaignReport";
@@ -43,6 +44,19 @@ export default function App() {
         <Route path="/sod" element={<SodRules />} />
         <Route path="/remediation" element={<Remediation />} />
       <Route path="/api-keys" element={<ApiKeys />} />
+        <Route
+          path="/users"
+          element={
+            me.role === "system_admin" ? (
+              <Users />
+            ) : (
+              <div className="card">
+                <h2>403 - Forbidden</h2>
+                <p className="muted">This area requires the system_admin role.</p>
+              </div>
+            )
+          }
+        />
         <Route path="/outbox" element={<Outbox />} />
         <Route path="/reviews" element={<Reviews />} />
         <Route path="/audit" element={<Audit />} />

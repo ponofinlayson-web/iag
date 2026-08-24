@@ -147,10 +147,10 @@ export default function Risk() {
           <div className="row">
             <Stat label="scored" value={summary.scored_identities} />
             <Stat label="average" value={summary.average_score} />
-            <Stat label="critical" value={bands.critical ?? 0} />
-            <Stat label="high" value={bands.high ?? 0} />
+            <Stat label="critical" value={bands.critical ?? 0} tone={(bands.critical ?? 0) > 0 ? "bad" : undefined} />
+            <Stat label="high" value={bands.high ?? 0} tone={(bands.high ?? 0) > 0 ? "warn" : undefined} />
             <Stat label="medium" value={bands.medium ?? 0} />
-            <Stat label="low" value={bands.low ?? 0} />
+            <Stat label="low" value={bands.low ?? 0} tone={(bands.low ?? 0) > 0 ? "ok" : undefined} />
           </div>
           <p className="muted">
             Last run: {summary.run_at ? summary.run_at.slice(0, 19).replace("T", " ") : "never"}

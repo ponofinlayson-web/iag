@@ -288,6 +288,29 @@ export interface RemediationAction {
   };
 }
 
+export interface UserRow {
+  id: number;
+  identity_id: number;
+  username: string | null;
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  department: string | null;
+  role: Role;
+  is_active: boolean;
+  must_change_password: boolean;
+  failed_attempts: number;
+  locked_until: string | null;
+  last_login: string | null;
+  recent_activity_count?: number;
+}
+
+export interface UserCreateInput {
+  identity_id: number;
+  role: Role;
+  password: string;
+}
+
 export interface ScimConfig {
   enabled: boolean;
   token_prefix: string | null;
@@ -725,6 +748,32 @@ export const api = {
     revoke: (id: number) =>
       request<{ ok: boolean; already_revoked: boolean }>(`/api/api-keys/${id}/revoke`, {
         method: "POST",
+      }),
+  },
+  users: {
+    list: () => request<{ items: UserRow[] }>("/api/users"),
+    get: (id: number) => request<UserRow>(`/api/users/${id}`),
+    create: (input: UserCreateInput) =>
+      request<UserRow>("/api/users", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    setRole: (id: number, role: Role) =>
+      request<UserRow>(`/api/users/${id}/role`, {
+        method: "PUT",
+        body: JSON.stringify({ role }),
+      }),
+    setStatus: (id: number, is_active: boolean) =>
+      request<UserRow>(`/api/users/${id}/status`, {
+        method: "PUT",
+        body: JSON.stringify({ is_active }),
+      }),
+    unlock: (id: number) =>
+      request<UserRow>(`/api/users/${id}/unlock`, { method: "PUT" }),
+    resetPassword: (id: number, password: string) =>
+      request<UserRow>(`/api/users/${id}/reset-password`, {
+        method: "PUT",
+        body: JSON.stringify({ password }),
       }),
   },
   scim: {

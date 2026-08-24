@@ -4,9 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>IAG</title>
+    <script>
+      // Pre-paint theme: localStorage wins (sticky choice); else OS
+      // preference on first visit; else dark. Runs before CSS applies to
+      // avoid a flash of the wrong theme.
+      (function () {
+        try {
+          var t = localStorage.getItem("iag.theme");
+          if (t !== "light" && t !== "dark") {
+            t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          }
+          if (t === "light") document.documentElement.dataset.theme = "light";
+        } catch (e) {
+          /* storage blocked: dark default */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+

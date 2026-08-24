@@ -290,6 +290,14 @@ export default function Remediation() {
             <p className="muted">Loading…</p>
           ) : (
             <div className="row" style={{ flexWrap: "wrap", gap: 16, alignItems: "center" }}>
+              <span className="row" style={{ gap: 8 }}>
+                <Badge tone="info">{scim.enabled ? "provisioning on" : "provisioning off"}</Badge>
+                {scim.token_prefix ? (
+                  <Badge tone="ok">token active</Badge>
+                ) : (
+                  <Badge tone="neutral">no token</Badge>
+                )}
+              </span>
               <label className="row" style={{ gap: 6 }}>
                 <input
                   type="checkbox"

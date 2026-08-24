@@ -1,15 +1,15 @@
-# IAG v2 Rebuild ‚Äî Handoff
+# IAG v2 Rebuild — Handoff
 
 Continuation point for a fresh agent session. Read this fully before acting.
-Project root: `D:\Projects\iag` (the v1 codebase it replaces is `D:\IAM-Simplified` ‚Äî
+Project root: `D:\Projects\iag` (the v1 codebase it replaces is `D:\IAM-Simplified` —
 read-only reference; copy NO code from it).
 
 ## Mission
 
 Clean-room rebuild of the user's first project (an IAM governance tool) as an
 exceptional, sound web app. Specs already derived and frozen:
-- `REQUIREMENTS.md` ‚Äî domain rules, roles, invariants, resilience contract
-- `ARCHITECTURE.md` ‚Äî stack, container topology, design slots
+- `REQUIREMENTS.md` — domain rules, roles, invariants, resilience contract
+- `ARCHITECTURE.md` — stack, container topology, design slots
 
 Read both first. They are the contract. Do not re-derive.
 
@@ -37,59 +37,119 @@ lines; corruption correlated with long single writes and long context.
 
 All backend files exist and passed AST checks at write time:
 
-backend/app/core/settings.py ‚Äî pydantic-settings, IAG_* env aliases,
+backend/app/core/settings.py — pydantic-settings, IAG_* env aliases,
   db_url_sync() conversion, validate_secrets() fail-fast
-backend/app/core/security.py ‚Äî bcrypt (passlib) + scrypt fallback,
+backend/app/core/security.py — bcrypt (passlib) + scrypt fallback,
   HMAC-signed session tokens (new_session_token / verify_session_token)
-backend/app/core/audit_service.py ‚Äî append_audit() same-transaction append,
+backend/app/core/audit_service.py — append_audit() same-transaction append,
   verify_chain() full-chain walk; canonical_json in models/audit.py
-backend/app/db.py ‚Äî async engine, Base, get_db, SQLite FK pragma
-backend/app/models/*.py ‚Äî identity, user (Role enum), source (DataSource,
+backend/app/db.py — async engine, Base, get_db, SQLite FK pragma
+backend/app/models/*.py — identity, user (Role enum), source (DataSource,
   Account, SourceType), entitlement (natural key uq constraint),
   campaign (Campaign/Review + status enums), audit (AuditEntry hash chain)
-backend/app/routers/deps.py ‚Äî get_current_user (cookie OR Bearer API-key
+backend/app/routers/deps.py — get_current_user (cookie OR Bearer API-key
   principal), ApiKeyPrincipal, read-only + keys-manage-keys chokes,
   require_roles, Annotated aliases: AdminUser, CertAdminUser, AnyUser,
   SessionUser (cookie-only), DbSession; exports _settings
-backend/app/routers/auth.py ‚Äî login (lockout), me/logout/change-password
+backend/app/routers/auth.py — login (lockout), me/logout/change-password
   (all SessionUser; logout no longer anonymous)
-backend/app/models/apikey.py ‚Äî ApiKey (name/prefix/hash/role/is_active/
+backend/app/models/apikey.py — ApiKey (name/prefix/hash/role/is_active/
   expires_at/last_used_at), sa.Enum(Role) name-storage
-backend/app/routers/identities.py ‚Äî list/get/create/update/delete,
+backend/app/routers/identities.py — list/get/create/update/delete,
   /import CSV upsert, /export CSV, manager-cycle guard (_check_cycle)
-backend/app/routers/sources.py ‚Äî CRUD, /upload CSV (natural-key entitlement
+backend/app/routers/sources.py — CRUD, /upload CSV (natural-key entitlement
   upsert), accounts list, link, bulk-link by username|email
-backend/app/routers/entitlements.py ‚Äî list, /stats, PUT privilege
-backend/app/routers/campaigns.py ‚Äî CRUD, /preview (DRY-RUN reviewer
-  resolution ‚Äî v1's best idea), stage, start (clears+regenerates reviews),
+backend/app/routers/entitlements.py — list, /stats, PUT privilege
+backend/app/routers/campaigns.py — CRUD, /preview (DRY-RUN reviewer
+  resolution — v1's best idea), stage, start (clears+regenerates reviews),
   cancel, /metrics
-backend/app/routers/reviews.py ‚Äî queue, count, history, detail, submit
+backend/app/routers/reviews.py — queue, count, history, detail, submit
   (revoke REQUIRES comment), bulk-submit, campaign auto-complete on last
-backend/app/routers/audit.py ‚Äî list (audit/system_admin/cert_admin only),
+backend/app/routers/audit.py — list (audit/system_admin/cert_admin only),
   /verify, /export CSV
-backend/app/routers/dashboard.py ‚Äî portfolio + personal workload counts
-backend/app/core/email_worker.py ‚Äî reminder worker: _claim_due (FOR UPDATE
+backend/app/routers/dashboard.py — portfolio + personal workload counts
+backend/app/core/email_worker.py — reminder worker: _claim_due (FOR UPDATE
   SKIP LOCKED + stuck reclaim), send outside TX, _finalize sent/failed/
   dead-letter + audit, run_pass, worker_loop (lifespan, skipped in test env)
-backend/app/routers/reminders.py ‚Äî read-only: GET /api/reminders/outbox
+backend/app/routers/reminders.py — read-only: GET /api/reminders/outbox
   (paged, campaign/status filter), GET /api/reminders/campaigns/{id}
   (by_status counts); CertAdminUser only
-backend/app/models/email.py ‚Äî EmailOutbox + OutboxStatus
-backend/alembic/versions/0003_email_outbox.py ‚Äî explicit DDL, portable types
-backend/tests/test_reminders.py ‚Äî enqueue, claim/send+chain, no-double-send,
-  retry‚Üídead-letter, cancel-blocks-claim, 401/403, boot (suite 19/19)
-backend/app/main.py ‚Äî FastAPI assembly, JSON logging, /api/health, SPA mount
-backend/app/bootstrap.py ‚Äî one-shot first-admin creator (env creds)
+backend/app/models/email.py — EmailOutbox + OutboxStatus
+backend/alembic/versions/0003_email_outbox.py — explicit DDL, portable types
+backend/tests/test_reminders.py — enqueue, claim/send+chain, no-double-send,
+  retry→dead-letter, cancel-blocks-claim, 401/403, boot (suite 19/19)
+backend/app/main.py — FastAPI assembly, JSON logging, /api/health, SPA mount
+backend/app/bootstrap.py — one-shot first-admin creator (env creds)
 backend/alembic.ini, alembic/env.py, alembic/script.py.mako
-backend/alembic/versions/0001_initial.py ‚Äî metadata-driven create_all
-backend/tests/conftest.py ‚Äî per-test SQLite file DB, in-loop seeding,
+backend/alembic/versions/0001_initial.py — metadata-driven create_all
+backend/tests/conftest.py — per-test SQLite file DB, in-loop seeding,
   admin_client fixture, exposes app.state.test_db_path
-backend/tests/test_auth.py ‚Äî health, 401s, lockout, cookie, change-password
-backend/tests/test_workflow.py ‚Äî full E2E: import‚Üísource‚Üíupload‚Üíbulk-link‚Üí
-  campaign‚Üípreview‚Üístage‚Üístart‚Üíreviews‚Üíauto-complete‚Üíchain verify
-backend/tests/test_audit_tamper.py ‚Äî raw-SQL mutation must break chain
-backend/pyproject.toml ‚Äî deps + pytest config (pythonpath=["."])
-uv.lock + .venv exist ‚Äî `uv sync` completed successfully [V]
+backend/tests/test_auth.py — health, 401s, lockout, cookie, change-password
+backend/tests/test_workflow.py — full E2E: import→source→upload→bulk-link→
+  campaign→preview→stage→start→reviews→auto-complete→chain verify
+backend/tests/test_audit_tamper.py — raw-SQL mutation must break chain
+backend/pyproject.toml — deps + pytest config (pythonpath=["."])
+uv.lock + .venv exist — `uv sync` completed successfully [V]
+
+## Current status (2026-08-24, session 25 close) — FEATURE 7 DONE, v0.3.0 TAGGED
+
+Feature 7 (RBAC users + themes) COMPLETE, committed, pushed, tagged.
+Commits: 0ce3122 (spec ratified) → 7032bdd (D1 users router, 14 tests,
+self-guards, audit-chained) → 9381483 + 75e98e7 (D5: version 0.3.0
+everywhere incl. stale FastAPI/health 0.1.0, CHANGELOG, README,
+contrast gate) → 62897f9 (D2-D4: Users view, theme system, accent
+dispersion) → 779fe8e (mojibake purge). Tags SYMMETRIC local+remote:
+v0.1.0 (44e1985), v0.2.0 (600e2cf, retroactive), v0.3.0 (779fe8e).
+Suite 288/288 [V], tsc/build green [V], contrast PASS both themes [V].
+
+Mojibake purge (this session): three CP1252-layer variant families
+found; ARCHITECTURE/REQUIREMENTS titles + 107 runs in THIS file fixed
+to proper UTF-8. One commit message deep in history (de5561a) still
+carries it — user ruled: leave it, no rewrite.
+
+### NEXT (in order), fresh chat each:
+
+T5 — E2E browser pass over Feature-7 surfaces. Walk as e2e_admin:
+Users CRUD (create via Typeahead + reveal-once password modal, role
+change, unlock, deactivate; self-guards disable own-row buttons),
+theme toggle (both themes render, choice sticky, no reload, no
+flash-of-wrong-theme on hard reload), accent spots (nav active,
+sorted column, filter chips, system_admin badge), stat tones
+(Dashboard/Risk), login screen unauthenticated. Also verify as
+non-admin: no Users nav item, direct /users route blocked. Method
+is session 22 (project MEMORY.md): real browser, live stack, API for
+what the UI lacks (none expected here).
+
+T6 — v0.3.0 release packaging à la v0.1.0 (session 24 recipe).
+README/CHANGELOG already current at 0.3.0 — remaining: .env.example
+knob audit (users router adds NO new Settings knobs — verify, do not
+assume), `docker compose config` audit, stack rebuild + /api/health
+== 0.3.0, suite re-run pre-tag.
+
+DECISION NEEDED before T6 (user): v0.3.0 is ALREADY tagged on
+779fe8e. If T6 produces commits, they land AFTER the tag. Options:
+(a) accept — tag marks the code release, packaging commits ride
+untagged; (b) delete+retag after packaging (remote tag rewrite, no
+dependents yet — safe NOW, not after any signing); (c) force T6 to
+zero-commit. Given the user's signing-symmetry concern, ask.
+
+### Superseded (history only, do not follow):
+- "Sequence for next session (feature 5 build)" (farther down)
+- "User's exact words for the new chat" (feature-5/6 era, farther down)
+
+### Environment notes (canvas host, this session):
+- Terminal FRAGILE: console host crashed once (Win32 pipe FailFast);
+  multi-cd chained compounds wedge. Use ONE short command per
+  invocation. No inline python -c with nested quotes — temp scripts.
+- Gate: no apostrophes in Python comments (regex stripper eats them;
+  root cause pinned, real fix deferred).
+- Files panel cannot serve D:\Projects\iag (workspace rooting) —
+  open files for the user via `code <path>`; never claim panel
+  visibility without agent-server log check.
+- Stack state NOT verified this session: check docker daemon +
+  `docker compose ps` before any live work. .env SMTP lines remain
+  [disabled] (session-24 landmine note below still applies).
+
 
 ## Current status
 
@@ -903,29 +963,29 @@ Shipped (3 commits on master):
 - b50cf71 SMTP hardening + proof tooling: adaptive STARTTLS/AUTH (ehlo ->
   starttls-if-offered with re-ehlo after [STARTTLS resets esmtp_features;
   has_extn("auth") would silently skip login], loud warning when relay offers
-  neither), scripts/smtp_sink.py (aiosmtpd dev sink, bind 127.0.0.1 ‚Äî
+  neither), scripts/smtp_sink.py (aiosmtpd dev sink, bind 127.0.0.1 —
   aiosmtpd probes `hostname`, 0.0.0.0 invalid on Windows; Docker Desktop
   proxies host.docker.internal to host loopback), scripts/live_smtp_proof.py.
 - 4decb98 proof-harness fixes: unique source/campaign names (live DB carries
-  history ‚Äî hardcoded names collide on rerun), expected count derived from
+  history — hardcoded names collide on rerun), expected count derived from
   start response, greeting assert CRLF-tolerant + name-agnostic (live admin
   is "System", fixture is "Ada"; SMTP wire is \r\n). compose.yaml now maps
   IAG_SMTP_PORT/USER/PASSWORD/FROM into app env (only HOST was mapped;
-  validate_smtp correctly refused boot on the gap ‚Äî fail-fast worked).
+  validate_smtp correctly refused boot on the gap — fail-fast worked).
 
-Proofs: pytest 27/27; live E2E PASS ‚Äî 9 emails through REAL SMTP branch to
+Proofs: pytest 27/27; live E2E PASS — 9 emails through REAL SMTP branch to
 aiosmtpd sink on live Postgres, rendered subject/URL/greeting asserted in
 sink log, outbox all sent, audit chain valid. First-ever exercise of the
 SMTP branch.
 
-Post-proof state: .env SMTP block REMOVED (log-only restored ‚Äî next campaign
+Post-proof state: .env SMTP block REMOVED (log-only restored — next campaign
 won't dead-letter against a dead sink). Re-enable for proofs: append 5 lines
 (IAG_SMTP_HOST=host.docker.internal, PORT=1025, USER/PASSWORD=any, FROM=
 iag@localhost), start sink (uv run --with aiosmtpd python scripts/smtp_sink.py
 D:\Projects\iag\smtp_sink_log.jsonl 1025), docker compose up -d, then
 scripts/live_smtp_proof.py.
 
-Arc status: 1/6 done. Next: feature 2 (live connectors) ‚Äî needs migration
+Arc status: 1/6 done. Next: feature 2 (live connectors) — needs migration
 0004, so do the fresh-volume reset proof (0003 on empty volume) FIRST.
 Remaining arc order: 3 remediation, 4 API keys, 5 risk/PDF/SIEM, 6 SCIM etc
 (design conversation required before 3-6; no reserved slots for them).
@@ -934,12 +994,12 @@ Remaining arc order: 3 remediation, 4 API keys, 5 risk/PDF/SIEM, 6 SCIM etc
 
 - **Fork A built, live-proven, committed 9e3f03b.** Enqueue on campaign
   start (resolved reviewer emails), in-replica worker
-  (claim SKIP LOCKED ‚Üí send outside TX ‚Üí finalize TX; stuck reclaim,
-  retry‚Üídead-letter, log-only dev delivery), read-only API + /outbox
+  (claim SKIP LOCKED → send outside TX → finalize TX; stuck reclaim,
+  retry→dead-letter, log-only dev delivery), read-only API + /outbox
   frontend view, migration 0003 on existing volume.
 - Proof: pytest 19/19; smoke.sh PASS incl kill-a-replica with worker
-  deployed; scripts/live_reminder_check.py PASS (enqueue ‚Üí sent within
-  poll window ‚Üí cancel path ‚Üí chain valid); 0003 via psql.
+  deployed; scripts/live_reminder_check.py PASS (enqueue → sent within
+  poll window → cancel path → chain valid); 0003 via psql.
 - Compose now passes reminder/SMTP knobs through with defaults; .env has
   IAG_REMINDER_DELAY_MINUTES=0, IAG_REMINDER_POLL_SECONDS=5 for fast
   proofs (60/60 code defaults remain for any deployment).
@@ -950,13 +1010,13 @@ Remaining arc order: 3 remediation, 4 API keys, 5 risk/PDF/SIEM, 6 SCIM etc
   cookie (module-level _COOKIE fallback added).
 - .gitignore: frontend/tsconfig.tsbuildinfo untracked.
 
-### 2026-08-17 (SoD session ‚Äî feature complete)
+### 2026-08-17 (SoD session — feature complete)
 - SoD engine shipped per ARCHITECTURE design slot: PURE READ-SIDE. Given
   identity entitlements + active rules -> violations, computed per request.
   No persistence of violations, no auto-revoke, no background anything.
   Reviewers decide; the engine informs.
 - New: models/sod.py (SodRule: two entitlement FKs CASCADE, severity,
-  is_active, unique name), alembic 0002 (EXPLICIT DDL ‚Äî not create_all ‚Äî
+  is_active, unique name), alembic 0002 (EXPLICIT DDL — not create_all —
   because migrate container is the only schema authority), core/sod_engine.py
   (violations_for_identities: 3 queries then set intersection),
   routers/sod.py (/api/sod/rules CRUD, CertAdminUser, append_audit
@@ -968,37 +1028,37 @@ Remaining arc order: 3 remediation, 4 API keys, 5 risk/PDF/SIEM, 6 SCIM etc
   tsc clean, vite build into backend/static/.
 - Tests 12/12 (was 8): test_sod_rules (CRUD validation + audit chain for
   rule writes + 401s), test_sod_e2e (violating identity across TWO sources
-  ‚Äî one account carries one entitlement ref, so a toxic pair needs two
-  accounts ‚Äî preview flags with named pair, review detail shows, approve
+  — one account carries one entitlement ref, so a toxic pair needs two
+  accounts — preview flags with named pair, review detail shows, approve
   stays manual, inactive rule flags nothing).
 - LIVE PROOFS: migration 0002 applied on the EXISTING volume without down
-  -v (psql: alembic_version=0002, sod_rules table present) ‚Äî the [H] from
+  -v (psql: alembic_version=0002, sod_rules table present) — the [H] from
   the secrets session is now [V]. smoke.sh PASS incl. kill-a-replica.
   scripts/live_sod_check.py: login -> GET rules -> POST rejected 400 ->
   chain valid, against real Postgres.
 - Trap (recurring): file_editor corrupted a line in routers/sod.py
-  (walrus-junk in delete_rule) ‚Äî caught on read-back, fixed. Also wrote an
+  (walrus-junk in delete_rule) — caught on read-back, fixed. Also wrote an
   unfinished stub test the first time. Post-write verification stays
   mandatory. Migrate container's alembic output is swallowed by a broken
-  log format (`%(levelname)` lines) ‚Äî prove migrations via psql, not logs.
+  log format (`%(levelname)` lines) — prove migrations via psql, not logs.
 - Commit 83bc69d. Stack running @ :8090, 6 commits total.
-- Next up: reminder-email task queue ‚Äî fork A RATIFIED by user;
+- Next up: reminder-email task queue — fork A RATIFIED by user;
   full build spec in the section below. Later: chain anchoring, real
   LDAP/Entra connectors, rule deactivation UI polish.
 
-### 2026-08-17 (secrets session ‚Äî candidate #1 done)
+### 2026-08-17 (secrets session — candidate #1 done)
 - All hardcoded dev secrets removed from tracked files. compose.yaml uses
   ${VAR:?err} for IAG_POSTGRES_PASSWORD / IAG_APP_DB_PASSWORD /
-  IAG_SECRET_KEY / IAG_BOOTSTRAP_ADMIN_PASSWORD ‚Äî missing .env means
+  IAG_SECRET_KEY / IAG_BOOTSTRAP_ADMIN_PASSWORD — missing .env means
   compose refuses to start (verified). Real values live in gitignored
   .env (generated by scripts/gen_env.py); .env.example is the template.
 - deploy/initdb.sh (new): entrypoint wrapper passes IAG_APP_DB_PASSWORD
   into initdb.sql as psql var :'app_password'. The .sql is mounted at
   /opt/initdb (NOT initdb.d) so the entrypoint runs it exactly once.
-  Wrapper must use psql -U "$POSTGRES_USER" ‚Äî default role 'postgres'
+  Wrapper must use psql -U "$POSTGRES_USER" — default role 'postgres'
   does not exist in this stack (POSTGRES_USER=iag_migrate).
 - Two real traps the fresh-volume verification caught:
-  1. The postgres entrypoint SWALLOWS initdb.d script failures ‚Äî stack
+  1. The postgres entrypoint SWALLOWS initdb.d script failures — stack
      came up "healthy" with no iag_app role (any login = 500). Fixed:
      db healthcheck now asserts SELECT 1 FROM pg_roles WHERE
      rolname='iag_app' alongside pg_isready.
@@ -1012,11 +1072,11 @@ Remaining arc order: 3 remediation, 4 API keys, 5 risk/PDF/SIEM, 6 SCIM etc
   pytest 8/8. Commit 871c797, no remote. NOTE: changing DB passwords
   later requires down -v (initdb only runs on an empty volume).
 
-### 2026-08-17 (stack + proof session ‚Äî ALL TASKS DONE)
+### 2026-08-17 (stack + proof session — ALL TASKS DONE)
 - Docker stack built & verified: compose.yaml (db -> migrate -> app-1..3 ->
   nginx), deploy/initdb.sql (iag_app DML-only role), deploy/nginx.conf
   (SPA + /api LB), Dockerfile (node24 build -> python:3.12-slim, runtime
-  invokes /app/.venv/bin/* DIRECTLY ‚Äî bare python/alembic and `uv run`
+  invokes /app/.venv/bin/* DIRECTLY — bare python/alembic and `uv run`
   both fail in the image: not on PATH / cache perms under USER nobody).
   nginx on host port **8090** (8080 is occupied by opik-backend-1).
 - Kill-a-replica proof PASSED: login -> audit chain valid -> stop
@@ -1024,13 +1084,13 @@ Remaining arc order: 3 remediation, 4 API keys, 5 risk/PDF/SIEM, 6 SCIM etc
   app-2 restarted, rejoined healthy. Stateless session portability
   proven (cookie minted pre-kill honored post-kill).
 - 3 real bugs the container run surfaced (all masked by SQLite/tests):
-  1. alembic 0001 had `import *` INSIDE functions ‚Äî compile-time error
+  1. alembic 0001 had `import *` INSIDE functions — compile-time error
      ast.parse cannot see. Gate upgrade: use py_compile, not ast.parse.
-  2. Aware datetime defaults into naive TIMESTAMP columns ‚Äî asyncpg
+  2. Aware datetime defaults into naive TIMESTAMP columns — asyncpg
      rejects (Postgres), aiosqlite silently accepts. Fixed: utcnow()
      returns NAIVE UTC (models/identity.py) + 6 call sites; convention:
      DB layer is naive-UTC everywhere.
-  3. uv cache init fails under USER nobody ‚Üí runtime uses venv binaries.
+  3. uv cache init fails under USER nobody → runtime uses venv binaries.
 - Stack is RUNNING now (5 containers healthy). Login: admin /
   Admin123!secret at http://localhost:8090. Teardown: docker compose
   down (add -v to also drop data + seeded static volume).
@@ -1039,7 +1099,7 @@ Remaining arc order: 3 remediation, 4 API keys, 5 risk/PDF/SIEM, 6 SCIM etc
 - Next candidates (post-v1 spec): reminder-email task queue inside app
   replicas (never a separate writer), SoD rules, external chain
   anchoring, real LDAP/Entra connectors. Also consider: prod-grade
-  secrets (env file / secret manager) ‚Äî compose currently hardcodes
+  secrets (env file / secret manager) — compose currently hardcodes
   dev passwords, fine for local stack, not for any real deployment.
 
 ### 2026-08-17 (frontend session)
@@ -1047,23 +1107,23 @@ Remaining arc order: 3 remediation, 4 API keys, 5 risk/PDF/SIEM, 6 SCIM etc
 - Frontend built & verified end-to-end: React 18 + TS + Vite SPA, typed
   client mirroring all routers, 9 views (Login/Dashboard/Identities/
   Sources/Entitlements/Campaigns/CampaignDetail/Reviews/Audit).
-  `npm install` + `tsc -b` clean + `vite build` ‚Üí backend/static/
+  `npm install` + `tsc -b` clean + `vite build` → backend/static/
   (192 kB js / 60.2 kB gzip).
-- E2E smoke via FastAPI TestClient (in-process, no sockets ‚Äî sandbox
-  blocked uvicorn binds winerror 10013): create_all ‚Üí bootstrap ‚Üí
-  GET / serves SPA ‚Üí login 200 ‚Üí /me 200 admin/system_admin ‚Üí
+- E2E smoke via FastAPI TestClient (in-process, no sockets — sandbox
+  blocked uvicorn binds winerror 10013): create_all → bootstrap →
+  GET / serves SPA → login 200 → /me 200 admin/system_admin →
   /api/dashboard 200. File: backend/smoke_testclient.py (kept for reuse;
   rerun = fresh sqlite dev db + bootstrap, see below).
 - Campaign lifecycle UI (preview/stage/start/cancel/metrics) was missing
   from original 8 views; added CampaignDetail.tsx at /campaigns/:id with
   DRY-RUN preview table (skips w/ reasons + reviewer sample).
-- "Search name‚Ä¶" placeholder was never broken ‚Äî hex dump proved E2 80 A6
+- "Search name…" placeholder was never broken — hex dump proved E2 80 A6
   present; terminal font renders ellipsis as '.'. Trust bytes, not display.
 - Corruption guard still real: ~6 new junk-marker incidents this session
   (.ts-holder, TS_TH_MARK, router_page_guard_fn, .ts-review-id etc.),
-  all caught by post-write verification + tsc. Keep writes ‚â§120 lines.
+  all caught by post-write verification + tsc. Keep writes ≤120 lines.
 
-## Reminder-email task queue ‚Äî FORK A RATIFIED (2026-08-17, pre-build)
+## Reminder-email task queue — FORK A RATIFIED (2026-08-17, pre-build)
 
 Contract comes from the frozen specs; do not re-derive:
 - ARCHITECTURE.md slot: "Email: outbound only, via an in-app task queue.
@@ -1086,10 +1146,10 @@ build A. Spec follows; the constraints block above it still applies.
   SKIP LOCKED so replicas don't double-send.
 Full fork-A build spec:
 
-Model ‚Äî `EmailOutbox` (models/email.py, table `email_outbox`, migration
+Model — `EmailOutbox` (models/email.py, table `email_outbox`, migration
 0003, explicit DDL like 0002):
 - id PK; campaign_id FK campaigns CASCADE; review_id FK reviews CASCADE
-  (one reminder per review ‚Äî the natural dedup key); reviewer_id FK
+  (one reminder per review — the natural dedup key); reviewer_id FK
   users CASCADE; recipient TEXT (resolved at enqueue time); subject TEXT;
   body TEXT; due_at TIMESTAMP naive-UTC; sent_at TIMESTAMP null;
   attempts INTEGER default 0; status TEXT pending/sending/sent/failed/
@@ -1098,10 +1158,10 @@ Model ‚Äî `EmailOutbox` (models/email.py, table `email_outbox`, migration
   created, due_at = now + IAG_REMINDER_DELAY_MINUTES (default 60).
   Campaign cancel marks outstanding pending rows cancelled.
 
-Worker ‚Äî `app/core/email_worker.py`, asyncio task per replica started
+Worker — `app/core/email_worker.py`, asyncio task per replica started
 at app startup (FastAPI lifespan in main.py):
-- Loop: sleep IAG_REMINDER_POLL_SECONDS (default 60) ‚Üí claim due rows ‚Üí
-  send ‚Üí finalize. 
+- Loop: sleep IAG_REMINDER_POLL_SECONDS (default 60) → claim due rows →
+  send → finalize. 
 - Claim: SELECT ... FOR UPDATE SKIP LOCKED on Postgres (multi-replica
   safe); SQLite tests serialize, acceptable. Claim TX marks rows
   'sending' + attempts+1. SEND HAPPENS OUTSIDE THE CLAIM TX (network
@@ -1111,7 +1171,7 @@ at app startup (FastAPI lifespan in main.py):
 - Retry: failed sends retry next poll up to IAG_REMINDER_MAX_ATTEMPTS
   (default 3), then dead-letter (status stays 'failed').
 - Send: SMTP via IAG_SMTP_HOST/PORT/USER/PASSWORD/FROM. DEV MODE: host
-  unset ‚Üí log-only delivery (log the email, mark sent) ‚Äî how the stack
+  unset → log-only delivery (log the email, mark sent) — how the stack
   runs today; keeps smoke honest without an SMTP server. If host IS set,
   creds validated at boot (fail-fast, secrets discipline).
 - Audit: one 'email_sent' entry per delivered row via append_audit
@@ -1119,21 +1179,21 @@ at app startup (FastAPI lifespan in main.py):
   entries; actor = system (actor_id None, actor_username 'system').
 
 API surface (read-only, CertAdminUser):
-- GET /api/reminders/outbox ‚Äî paged, filter campaign_id + status
-- GET /api/campaigns/{id}/reminders ‚Äî rows for one campaign
+- GET /api/reminders/outbox — paged, filter campaign_id + status
+- GET /api/campaigns/{id}/reminders — rows for one campaign
 
 Tests (SQLite, log-only send path; no real SMTP):
 - enqueue-on-start: start creates one pending row per review, due_at ok
-- claim-and-send: due row ‚Üí sent, audit 'email_sent', sent_at set
+- claim-and-send: due row → sent, audit 'email_sent', sent_at set
 - no-double-send: second claim returns nothing (SKIP LOCKED proven on
   Postgres via live script)
 - retry-then-dead-letter: failures retry to max attempts then stop
-- cancel-cancels: campaign cancel ‚Üí outstanding rows cancelled
+- cancel-cancels: campaign cancel → outstanding rows cancelled
 - boot: worker task starts with TestClient context, no error
 
-Live proof (stack): scripts/live_reminder_check.py ‚Äî login ‚Üí start
-campaign with pending reviews ‚Üí outbox rows exist via API ‚Üí wait for
-sent (log-only) ‚Üí audit chain still valid.
+Live proof (stack): scripts/live_reminder_check.py — login → start
+campaign with pending reviews → outbox rows exist via API → wait for
+sent (log-only) → audit chain still valid.
 
 Non-goals (do not build): templates/editing UI, HTML email, inbound
 mail, read receipts, per-reviewer digesting, email prefs. One plain-
@@ -1145,19 +1205,19 @@ text reminder per pending review, one time, v1.
   types used. DateTime columns are timezone-naive in DB but set from
   datetime.now(timezone.utc); AuditEntry.ts hashes ISO format with tz.
 - Session auth = HMAC-SHA256 signed token in httpOnly cookie "iag_session".
-  Stateless ‚Äî any replica validates any session (that's what makes the 3
+  Stateless — any replica validates any session (that's what makes the 3
   replicas interchangeable). Token payload: sub/username/role/exp.
 - Audit chain: record_hash = SHA256(prev_hash + canonical_json(payload));
   payload keys: action, actor_id, actor_username, details (canonical JSON
   string), entity_id, entity_type, ts (ISO 8601 with tz). GENESIS = 64 zeros.
   append_audit() reads last entry INSIDE the caller's transaction and
-  commits with it ‚Äî change and audit land atomically or not at all.
+  commits with it — change and audit land atomically or not at all.
 - Campaign start deletes existing reviews for that campaign BEFORE
   inserting new ones (re-start = regenerate). Reviewer resolution:
   source_owner mode uses source's owner User (skip + report if none);
   manager mode uses identity's manager's User, fallback = campaign creator.
 - Campaign auto-completes when last review is decided (submit path checks
-  done==total and flips status; bulk-submit does NOT auto-complete ‚Äî
+  done==total and flips status; bulk-submit does NOT auto-complete —
   acceptable for skeleton, noted).
 - Entitlement natural key = (data_source_id, source_column, source_value
   lowercase). Catalog IDs ENT-00001+ from count+1 (race-safe enough for

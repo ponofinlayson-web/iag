@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.core.settings import Settings
 from app.core.scim import ScimError
-from app.routers import apikeys, audit, auth, campaigns, dashboard, entitlements, identities, remediation, reminders, reviews, risk, scim, sod, sources, syncs
+from app.routers import apikeys, audit, auth, campaigns, dashboard, entitlements, identities, remediation, reminders, reviews, risk, scim, sod, sources, syncs, users
 settings = Settings()
 settings.validate_secrets()
 settings.validate_smtp()
@@ -88,6 +88,7 @@ app.include_router(dashboard.router)
 app.include_router(reminders.router)
 app.include_router(remediation.router)
 app.include_router(apikeys.router)
+app.include_router(users.router)
 app.include_router(risk.router)
 app.include_router(scim.router)
 app.include_router(scim.admin_router)

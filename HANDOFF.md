@@ -91,7 +91,30 @@ backend/tests/test_audit_tamper.py — raw-SQL mutation must break chain
 backend/pyproject.toml — deps + pytest config (pythonpath=["."])
 uv.lock + .venv exist — `uv sync` completed successfully [V]
 
-## Current status (2026-08-24, session 26 close) — T5 PASS
+## Current status (2026-08-24, session 27 close) — T6 PASS, RELEASE v0.3.0 SEALED
+Release packaging complete à la the session-24 T4 recipe. All gates
+[V] on this session's own runs:
+- Knob audit: users router has ZERO Settings references (grep) —
+  Feature 7 added no new knobs; 28/28 app knobs documented in
+  .env.example (4 required + 24 commented), all commented values
+  match Settings defaults; IAG_DATABASE_URL/IAG_ENV are
+  compose-managed (interpolated per-service / pinned) [V].
+- Compose audit: `docker compose config` (and with
+  `--profile connectors`) validates clean — no warnings, no legacy
+  version: key, single published port 8090, glauth/openldap profile-
+  gated out of the default stack [V].
+- Rebuild gate: all 4 images rebuilt from the tagged tree (cache-
+  warm), `up -d`, all replicas healthy, /api/health == 0.3.0 [V].
+- Suite gate: backend pytest 288/288 (129s) against the rebuilt
+  stack [V]. Frontend unchanged since 779fe8e (tsc/build green
+  recorded session 25; no re-run needed).
+- Version-surface check: README L120/123, CHANGELOG [0.3.0] entry,
+  pyproject, package.json all at 0.3.0 [V]. Tag v0.3.0 verified
+  SYMMETRIC local+remote, annotated, on 779fe8e [V].
+Post-tag delta remains HANDOFF.md only (this commit). T6 commits
+land after the tag, untagged, per the ratified decision.
+
+## Prior status (2026-08-24, session 26 close) — T5 PASS
 E2E browser pass over Feature-7 surfaces. Session opened on a stale
 stack serving 0.1.0 — all images rebuilt (incl. migrate container),
 `docker compose ps` clean, /api/health reports 0.3.0 [V]. e2e_admin
@@ -146,7 +169,7 @@ created; one lockout + unlock cycle; two password resets. admin id=1
 untouched. Tree clean @ 59ad56c; no commits this session (ops/E2E).
 
 
-## Current status (2026-08-24, session 25 close) — FEATURE 7 DONE, v0.3.0 TAGGED
+## Prior status (2026-08-24, session 25 close) — FEATURE 7 DONE, v0.3.0 TAGGED
 
 Feature 7 (RBAC users + themes) COMPLETE, committed, pushed, tagged.
 Commits: 0ce3122 (spec ratified) → 7032bdd (D1 users router, 14 tests,
@@ -164,15 +187,24 @@ carries it — user ruled: leave it, no rewrite.
 
 ### NEXT (in order), fresh chat each:
 
-T6 — v0.3.0 release packaging à la v0.1.0 (session 24 recipe).
-README/CHANGELOG already current at 0.3.0 — remaining: .env.example
-knob audit (users router adds NO new Settings knobs — verify, do not
-assume), `docker compose config` audit, stack rebuild + /api/health
-== 0.3.0, suite re-run pre-tag.
+NOTHING BLOCKING. The v0.3.0 release is sealed: features 1-7 built,
+T1-T6 release tasks all closed, tag symmetric local+remote. What
+remains is optional polish / backlog, user's call on priority:
 
-DECISION RATIFIED (2026-08-24, post-T5, user chose (a)): v0.3.0 tag
-STAYS on 779fe8e — it marks the code release. Any T6 commits land
-after it, untagged. Do NOT delete/retag. Remote tag untouched.
+P1 (T5 finding 1, cosmetic): hide the page shell on 403 — reviewer
+direct-navigating /risk sees shell + "Insufficient role" notice +
+"No snapshots" empty state. Backend correct; nav correct. Same
+pattern as the /users 403 page. Small frontend fix.
+P2 (T5 finding 2, candidate feature): must_change_password has no
+self-service UI — POST /api/auth/change-password exists, nothing
+surfaces it, login does not force redirect. t5_browser keeps using
+the admin-reset password. Design + build a change-password flow.
+P3 (backlog, old): connector config panel remounts empty + PUT
+replace-semantics (session-22 polish item 1 — echo stored config,
+consider merge-not-replace).
+
+DECISION STILL RATIFIED (2026-08-24): v0.3.0 tag STAYS on 779fe8e.
+Do NOT delete/retag. Remote tag untouched. Post-tag commits untagged.
 
 ### Superseded (history only, do not follow):
 - "Sequence for next session (feature 5 build)" (farther down)

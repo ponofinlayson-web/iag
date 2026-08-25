@@ -170,12 +170,9 @@ knob audit (users router adds NO new Settings knobs — verify, do not
 assume), `docker compose config` audit, stack rebuild + /api/health
 == 0.3.0, suite re-run pre-tag.
 
-DECISION NEEDED before T6 (user): v0.3.0 is ALREADY tagged on
-779fe8e. If T6 produces commits, they land AFTER the tag. Options:
-(a) accept — tag marks the code release, packaging commits ride
-untagged; (b) delete+retag after packaging (remote tag rewrite, no
-dependents yet — safe NOW, not after any signing); (c) force T6 to
-zero-commit. Given the user's signing-symmetry concern, ask.
+DECISION RATIFIED (2026-08-24, post-T5, user chose (a)): v0.3.0 tag
+STAYS on 779fe8e — it marks the code release. Any T6 commits land
+after it, untagged. Do NOT delete/retag. Remote tag untouched.
 
 ### Superseded (history only, do not follow):
 - "Sequence for next session (feature 5 build)" (farther down)

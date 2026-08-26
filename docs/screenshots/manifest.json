@@ -1,0 +1,93 @@
+{
+ "generated": "2026-08-26T17:09:15",
+ "base": "http://localhost:8091",
+ "shots": [
+  {
+   "file": "01-login.png",
+   "bytes": 10305,
+   "sha1": "65d2d6b268db"
+  },
+  {
+   "file": "02-dashboard.png",
+   "bytes": 27106,
+   "sha1": "ef4c0838b648"
+  },
+  {
+   "file": "03-identities.png",
+   "bytes": 64546,
+   "sha1": "7dc248289d3e"
+  },
+  {
+   "file": "04-sources.png",
+   "bytes": 73236,
+   "sha1": "353a24d1cc4f"
+  },
+  {
+   "file": "05-entitlements.png",
+   "bytes": 114037,
+   "sha1": "b2d0b39ff1dc"
+  },
+  {
+   "file": "06-campaigns.png",
+   "bytes": 60498,
+   "sha1": "bbead123e5c5"
+  },
+  {
+   "file": "07-risk.png",
+   "bytes": 107334,
+   "sha1": "e52beece555f"
+  },
+  {
+   "file": "08-sod.png",
+   "bytes": 48585,
+   "sha1": "7bf735c2801f"
+  },
+  {
+   "file": "09-remediation.png",
+   "bytes": 153604,
+   "sha1": "675c4ce216ce"
+  },
+  {
+   "file": "10-api-keys.png",
+   "bytes": 55169,
+   "sha1": "18a1975a7413"
+  },
+  {
+   "file": "11-users.png",
+   "bytes": 42366,
+   "sha1": "071a5f6ff3e9"
+  },
+  {
+   "file": "12-reminders-outbox.png",
+   "bytes": 293504,
+   "sha1": "5e6a6b1e7775"
+  },
+  {
+   "file": "13-reviews.png",
+   "bytes": 212034,
+   "sha1": "eae06cb3c951"
+  },
+  {
+   "file": "14-audit.png",
+   "bytes": 193061,
+   "sha1": "792d9268cfaa"
+  },
+  {
+   "file": "15-campaign-detail.png",
+   "bytes": 30031,
+   "sha1": "4769d9af6e18"
+  },
+  {
+   "file": "16-campaign-report.png",
+   "bytes": 68248,
+   "sha1": "031a3359af36"
+  },
+  {
+   "file": "17-theme-dark.png",
+   "bytes": 27092,
+   "sha1": "9eeda7ebb2ba"
+  }
+ ],
+ "ok": true,
+ "problems": []
+}

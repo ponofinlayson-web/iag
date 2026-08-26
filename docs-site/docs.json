@@ -12,15 +12,26 @@
     "pages": [
       {
         "group": "Getting Started",
-        "pages": ["introduction"]
+        "pages": [
+          "introduction"
+        ]
       },
       {
         "group": "IAG",
-        "pages": ["iag-admin"]
+        "pages": [
+          "iag-admin"
+        ]
       }
     ]
   },
   "contextual": {
-    "options": ["copy", "view", "chatgpt", "claude", "perplexity", "mcp"]
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "perplexity",
+      "mcp"
+    ]
   }
 }

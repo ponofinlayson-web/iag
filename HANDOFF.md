@@ -97,8 +97,8 @@ all P1-P3 work reconstructed from event forensics and verified on disk
 before this session's E2E/commit pass. Closes session-26 findings 1+2
 (403 shell leak; no self-service change-password) and the connector
 PUT replace-semantics hazard. Commits: 68f22a7 (P1+P2), d191ee4 (P3).
-NOT pushed — branch main is 5 ahead of origin/main, push awaits user
-decision. All items [V] unless noted:
+Pushed 2026-08-25 (user-authorized): origin/main == 51dc106, local and
+remote level. All items [V] unless noted:
 
 P1 — hide page shell on 403 (frontend only; backend stays the boundary):
 - App.tsx: route role gates derived from the NAV role map the topbar

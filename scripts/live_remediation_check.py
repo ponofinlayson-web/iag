@@ -24,11 +24,14 @@ ADMIN = os.environ.get("IAG_ADMIN", "admin")
 PASSWORD = os.environ.get("IAG_BOOTSTRAP_ADMIN_PASSWORD", "")
 
 
+DB = os.environ.get("IAG_DB_CONTAINER", "iag-db")
+
+
 def psql(sql: str) -> str:
     import subprocess
 
     r = subprocess.run(
-        ["docker", "exec", "iag-db", "psql", "-U", "iag_migrate", "-d", "iag", "-tAc", sql],
+        ["docker", "exec", DB, "psql", "-U", "iag_migrate", "-d", "iag", "-tAc", sql],
         capture_output=True, text=True,
     )
     if r.returncode != 0:
@@ -99,7 +102,7 @@ def main() -> int:
     r = client.post("/api/sources", json={
         "name": "live-remediation-src",
         "source_type": "sql",
-        "owner_identity_id": 1,
+        "owner_employee_id": "E-ADMIN",  # API contract: employee_id, not identity id
     })
     if r.status_code not in (200, 201, 409):
         log(f"source create failed: {r.text[:200]}")
@@ -149,6 +152,35 @@ def main() -> int:
 
     accounts = client.get(f"/api/sources/{source_id}/accounts").json()["items"]
     log(f"accounts: {[(a['id'], a['account_value'], a['privilege_level']) for a in accounts]}")
+
+    # house style (see live_enforce_check): connector sync leaves
+    # Account.entitlement_id NULL by design and no API sets it; bind from
+    # the demo table so campaign reviews have access rows to cover.
+    psql(
+        f"UPDATE accounts a SET entitlement_id = e.id "
+        f"FROM live_remediation_demo d, entitlements e "
+        f"WHERE a.account_value = d.account AND e.name = d.entitlement "
+        f"AND a.data_source_id = {source_id} AND e.data_source_id = {source_id}"
+    )
+
+    # sync also leaves Account.identity_id NULL; create demo identities and
+    # bind (same house style) - campaign review generation skips accounts
+    # with no owning identity (start_campaign: `if a.identity_id is None`).
+    for i, uname in enumerate(("liveuser1", "liveuser2", "liveuser3"), start=1):
+        r = client.post("/api/identities", json={
+            "employee_id": f"LR-{uname}",
+            "username": uname,
+            "email": f"{uname}@iag.local",
+            "first_name": "Live",
+            "last_name": f"Proof{i}",
+        })
+        if r.status_code not in (200, 201, 409):
+            log(f"identity create {uname} failed: {r.text[:200]}")
+            return 1
+    psql(
+        f"UPDATE accounts a SET identity_id = i.id FROM identities i "
+        f"WHERE a.account_value = i.username AND a.data_source_id = {source_id}"
+    )
 
     # 4. campaign over this source
     r = client.post("/api/campaigns", json={

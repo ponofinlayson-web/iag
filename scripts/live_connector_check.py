@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import subprocess
 
 BASE = os.environ.get("IAG_BASE_URL", "http://localhost:8090")
+DB = os.environ.get("IAG_DB_CONTAINER", "iag-db")
 PW = os.environ.get("IAG_BOOTSTRAP_ADMIN_PASSWORD", "")
 APP_DB_PW = os.environ.get("IAG_APP_DB_PASSWORD", "")
 
@@ -48,7 +49,7 @@ def call(method, path, body=None, cookie=None):
 
 def psql(sql):
     r = subprocess.run(
-        ["docker", "exec", "iag-db", "psql", "-U", "iag_migrate", "-d", "iag", "-tAc", sql],
+        ["docker", "exec", DB, "psql", "-U", "iag_migrate", "-d", "iag", "-tAc", sql],
         capture_output=True, text=True,
     )
     if r.returncode != 0:

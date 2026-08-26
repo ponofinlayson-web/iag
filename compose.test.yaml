@@ -1,0 +1,33 @@
+# Test-isolation overlay — CLONE ONLY (D:\iag-test).
+# Runs this stack beside the live original without touching it:
+#   - project name  iag  ->  iag-test   (separate volumes + network)
+#   - container names   iag-*  ->  iag-test-*
+#   - nginx port        8090   ->  8091
+# Usage: docker compose -f compose.yaml -f compose.test.yaml <cmd>
+name: iag-test
+
+services:
+  iag-db:
+    container_name: iag-test-db
+  iag-migrate:
+    container_name: iag-test-migrate
+  iag-app-1:
+    container_name: iag-test-app-1
+    environment:
+      IAG_APP_BASE_URL: http://localhost:8091
+  iag-app-2:
+    container_name: iag-test-app-2
+    environment:
+      IAG_APP_BASE_URL: http://localhost:8091
+  iag-app-3:
+    container_name: iag-test-app-3
+    environment:
+      IAG_APP_BASE_URL: http://localhost:8091
+  iag-nginx:
+    container_name: iag-test-nginx
+    ports: !override
+      - "8091:80"
+  iag-glauth:
+    container_name: iag-test-glauth
+  iag-openldap:
+    container_name: iag-test-openldap

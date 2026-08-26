@@ -42,6 +42,9 @@ import urllib.error
 import urllib.request
 
 BASE = os.environ.get("IAG_BASE_URL", "http://localhost:8090")
+DB = os.environ.get("IAG_DB_CONTAINER", "iag-db")
+APP1 = os.environ.get("IAG_APP_CONTAINER", "iag-app-1")
+LDAP = os.environ.get("IAG_OPENLDAP_CONTAINER", "iag-openldap")
 PW = os.environ.get("IAG_BOOTSTRAP_ADMIN_PASSWORD", "")
 APP_DB_PW = os.environ.get("IAG_APP_DB_PASSWORD", "")
 
@@ -89,7 +92,7 @@ def call(method, path, body=None, cookie=None):
 
 def psql(sql):
     r = subprocess.run(
-        ["docker", "exec", "iag-db", "psql", "-U", "iag_migrate", "-d",
+        ["docker", "exec", DB, "psql", "-U", "iag_migrate", "-d",
          "iag", "-tAc", sql],
         capture_output=True, text=True,
     )
@@ -116,26 +119,26 @@ def ldap_py(code):
         local = f.name
     path = f"/tmp/{os.path.basename(local)}"
     try:
-        subprocess.run(["docker", "cp", local, f"iag-app-1:{path}"], check=True)
-        return docker_exec("iag-app-1", ["/app/.venv/bin/python", path])
+        subprocess.run(["docker", "cp", local, f"{APP1}:{path}"], check=True)
+        return docker_exec(APP1, ["/app/.venv/bin/python", path])
     finally:
         # nobody-user exec may lack unlink rights; leave-behind is
         # harmless (/tmp scratch), so cleanup is best-effort
-        subprocess.run(["docker", "exec", "iag-app-1", "rm", "-f", path],
+        subprocess.run(["docker", "exec", APP1, "rm", "-f", path],
                        capture_output=True)
         os.unlink(local)
 
 
 # ---------------------------------------------------------- preconditions
 try:
-    docker_exec("iag-openldap", ["ldapwhoami", "-Q", "-Y", "EXTERNAL", "-H", "ldapi://"])
+    docker_exec(LDAP, ["ldapwhoami", "-Q", "-Y", "EXTERNAL", "-H", "ldapi://"])
 except RuntimeError as e:
     sys.exit(f"iag-openldap not reachable: {e}\n"
              "docker compose --profile connectors up -d iag-openldap")
 
 # memberOf overlay must target groupOfNames/member (osixia default is
 # uniqueMember); idempotent: only rewrite when actually different.
-overlay = docker_exec("iag-openldap", [
+overlay = docker_exec(LDAP, [
     "ldapsearch", "-Q", "-Y", "EXTERNAL", "-H", "ldapi://", "-b",
     "olcOverlay={0}memberof,olcDatabase={1}mdb,cn=config", "-s", "base",
     "-LLL", "olcMemberOfGroupOC", "olcMemberOfMemberAD",
@@ -151,9 +154,9 @@ if "groupOfNames" not in overlay or "memberAD: member" not in overlay:
     with tempfile.NamedTemporaryFile("w", suffix=".ldif", delete=False) as f:
         f.write(fix)
         local = f.name
-    subprocess.run(["docker", "cp", local, "iag-openldap:/tmp/_fix.ldif"], check=True)
+    subprocess.run(["docker", "cp", local, f"{LDAP}:/tmp/_fix.ldif"], check=True)
     os.unlink(local)
-    docker_exec("iag-openldap",
+    docker_exec(LDAP,
                 ["ldapmodify", "-Q", "-Y", "EXTERNAL", "-H", "ldapi://",
                  "-f", "/tmp/_fix.ldif"])
     log("memberOf overlay repointed to groupOfNames/member")

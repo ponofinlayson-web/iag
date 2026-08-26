@@ -14,6 +14,7 @@ import urllib.request
 import hashlib
 
 BASE = os.environ.get("IAG_BASE_URL", "http://localhost:8090")
+DB = os.environ.get("IAG_DB_CONTAINER", "iag-db")
 TOKEN = "iag_scim_smoke_" + secrets.token_urlsafe(32)
 
 
@@ -41,7 +42,7 @@ def call(method, path, body=None, bearer=None):
 
 def psql(sql):
     subprocess.run(
-        ["docker", "exec", "iag-db", "psql", "-U", "iag_migrate", "-d", "iag",
+        ["docker", "exec", DB, "psql", "-U", "iag_migrate", "-d", "iag",
          "-v", "ON_ERROR_STOP=1", "-c", sql],
         check=True, capture_output=True,
     )

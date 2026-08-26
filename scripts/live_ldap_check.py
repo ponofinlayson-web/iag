@@ -13,6 +13,8 @@ import time
 import urllib.request
 
 BASE = os.environ.get("IAG_BASE_URL", "http://localhost:8090")
+DB = os.environ.get("IAG_DB_CONTAINER", "iag-db")
+GLAUTH_C = os.environ.get("IAG_GLAUTH_CONTAINER", "iag-glauth")
 PW = os.environ.get("IAG_BOOTSTRAP_ADMIN_PASSWORD", "")
 SRC_NAME = "__live_ldap_connector__"
 GLAUTH = "ldap://iag-glauth:3893"
@@ -46,7 +48,7 @@ def call(method, path, body=None, cookie=None):
 
 def psql(sql):
     r = subprocess.run(
-        ["docker", "exec", "iag-db", "psql", "-U", "iag_migrate", "-d", "iag", "-tAc", sql],
+        ["docker", "exec", DB, "psql", "-U", "iag_migrate", "-d", "iag", "-tAc", sql],
         capture_output=True, text=True,
     )
     if r.returncode != 0:
@@ -56,7 +58,7 @@ def psql(sql):
 
 # --- preconditions -------------------------------------------------------
 try:
-    r = subprocess.run(["docker", "inspect", "iag-glauth"], capture_output=True, text=True)
+    r = subprocess.run(["docker", "inspect", GLAUTH_C], capture_output=True, text=True)
     assert r.returncode == 0, "glauth container not running: docker compose --profile connectors up -d glauth"
 except AssertionError as e:
     sys.exit(str(e))

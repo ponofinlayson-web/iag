@@ -24,3 +24,7 @@ scripts/smtp_sink_log.jsonl
 
 # Obsidian vault config (local viewer state)
 .obsidian/
+
+# mintlify dev server scratch logs
+docs-site/mintlify-dev*.out
+docs-site/mintlify-dev*.err

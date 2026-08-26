@@ -1,0 +1,26 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "IAG Docs",
+  "colors": {
+    "primary": "#0F172A",
+    "light": "#64748B",
+    "dark": "#0F172A"
+  },
+  "favicon": "/favicon.png",
+  "navigation": {
+    "pages": [
+      {
+        "group": "Getting Started",
+        "pages": ["introduction"]
+      },
+      {
+        "group": "IAG",
+        "pages": ["iag-admin"]
+      }
+    ]
+  },
+  "contextual": {
+    "options": ["copy", "view", "chatgpt", "claude", "perplexity", "mcp"]
+  }
+}

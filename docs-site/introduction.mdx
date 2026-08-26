@@ -1,0 +1,32 @@
+---
+title: Introduction
+description: Validated current-state documentation for IAG — Identity & Access Governance
+---
+
+# IAG Docs
+
+This site publishes **validated current-state documentation** for IAG
+(Identity & Access Governance): a self-hosted platform for identity
+ingestion, certification campaigns, segregation-of-duties detection,
+remediation/enforcement, SCIM provisioning, risk scoring, and a
+tamper-evident audit trail.
+
+## How this documentation stays current
+
+Every page marked **[V]** was produced by the `docs-refresh` pipeline:
+
+1. The isolated stack is brought up and verified (the production stack is
+   never touched).
+2. Real UI screenshots are captured via Playwright with an audit manifest
+   (blank/duplicate frames fail the run).
+3. Live evidence (health, dashboard counters, audit-chain verification) is
+   collected from the running system.
+4. Pages are updated **only** with numbers a tool produced that run.
+5. Changes land in git; Mintlify publishes them (PR previews on every
+   change, deploy on merge).
+
+## Start here
+
+- [IAG Administrator Guide](/iag-admin) — the validated, screenshot-rich
+  current-state guide (architecture, every admin view, roles, connectors,
+  SCIM/enforcement, runbook, troubleshooting, evidence appendix).

@@ -21,3 +21,6 @@ frontend/tsconfig.tsbuildinfo
 smtp_sink_run.log
 
 scripts/smtp_sink_log.jsonl
+
+# Obsidian vault config (local viewer state)
+.obsidian/

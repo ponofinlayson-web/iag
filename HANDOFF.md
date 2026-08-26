@@ -91,7 +91,56 @@ backend/tests/test_audit_tamper.py — raw-SQL mutation must break chain
 backend/pyproject.toml — deps + pytest config (pythonpath=["."])
 uv.lock + .venv exist — `uv sync` completed successfully [V]
 
-## Current status (2026-08-24, session 27 close) — T6 PASS, RELEASE v0.3.0 SEALED
+## Current status (2026-08-25, session 28 close) — P1-P3 BACKLOG CLEARED, LIVE-VERIFIED
+Session opened as recovery of a hung chat (harness KeyError mid-E2E);
+all P1-P3 work reconstructed from event forensics and verified on disk
+before this session's E2E/commit pass. Closes session-26 findings 1+2
+(403 shell leak; no self-service change-password) and the connector
+PUT replace-semantics hazard. Commits: 68f22a7 (P1+P2), d191ee4 (P3).
+NOT pushed — branch main is 5 ahead of origin/main, push awaits user
+decision. All items [V] unless noted:
+
+P1 — hide page shell on 403 (frontend only; backend stays the boundary):
+- App.tsx: route role gates derived from the NAV role map the topbar
+  filters on (single source of truth); unauthorized direct-nav now gets
+  a full-page no-shell Forbidden screen instead of shell + notice.
+
+P2 — self-service change-password:
+- ForcedPasswordChange.tsx (new): full-page gate mounted INSTEAD of the
+  shell when me.must_change_password; logout is the only escape; after
+  change, me is refreshed and the gate releases.
+- Layout.tsx: topbar Change password modal (all roles) →
+  POST /api/auth/change-password; success signs the user out (fresh
+  session; no stale cookie).
+- Live E2E: wrong old pw → in-modal "Current password incorrect",
+  session intact, no logout; correct change → forced logout; re-login
+  with the new password succeeds; forced interstitial blocks the shell
+  until the change completes (verified live in the hung session,
+  2026-08-24; modal path verified this session).
+
+P3 — connector config PUT merge-not-replace:
+- sources.py: PUT merges config against stored — absent keys keep
+  stored values, present-but-blank keys are cleared pre-validate;
+  merged config is what the adapter validates (a failed partial PUT
+  can no longer wipe stored fields). sync_interval_minutes uses
+  model_fields_set: absent keeps stored, explicit null clears (and
+  nulls next_sync_at). Audit logs the effective values.
+- Sources.tsx: interval box sends explicit null when empty, so UI
+  clearing works under merge semantics.
+- Live proof vs the glauth source (id 6): failed partial PUT left
+  stored config 100% intact; blank url → 400 "ldap config missing
+  url"; absent interval kept 45; explicit null cleared it and nulled
+  next_sync_at. Interval restored to 45 after the test.
+
+Gates this session: tsc clean; production build ok; backend pytest
+290/290 (includes two new P3 regression tests); App.tsx EOF blank-line
+cleanup (byte-verified, tsc re-run after).
+
+DB deltas (e2e residue): p6_browser (reviewer) password now
+p6-new-pw-2026b (E2E change-password subject); e2e_admin state as
+session 26. admin id=1 untouched.
+
+## Prior status (2026-08-24, session 27 close) — T6 PASS, RELEASE v0.3.0 SEALED
 Release packaging complete à la the session-24 T4 recipe. All gates
 [V] on this session's own runs:
 - Knob audit: users router has ZERO Settings references (grep) —

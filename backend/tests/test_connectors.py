@@ -433,6 +433,110 @@ def test_connector_block_echoes_config_not_secret(admin_client, worker_session):
     assert "secret" not in json.dumps(conn).lower().replace("has_secret", "")
 
 
+def test_connector_put_merges_absent_keys_keeps_stored(admin_client, worker_session, monkeypatch):
+    """PUT /api/sources/{id}/connector with a PARTIAL config must keep
+    stored values for absent keys (merge, not replace) — regression for
+    the replace-semantics footgun where a partial PUT silently dropped
+    fields. Blank-string values still clear explicitly."""
+    from app.models.source import DataSource
+
+    r = admin_client.post("/api/sources", json={"name": "MERGE", "source_type": "ldap"})
+    assert r.status_code == 200, r.text
+    sid = r.json()["id"]
+
+    async def seed():
+        async with worker_session() as maker:
+            async with maker() as s:
+                src = await s.get(DataSource, sid)
+                src.connector_config = json.dumps({
+                    "url": "ldap://ldap.example.com:389",
+                    "base_dn": "dc=example,dc=com",
+                    "bind_dn": "cn=svc,dc=example,dc=com",
+                    "filter": "(objectClass=person)",
+                })
+                src.connector_secret = "stored-secret"
+                await s.commit()
+
+    asyncio.run(seed())
+
+    calls = []
+
+    class RecordingAdapter:
+        def validate(self, config, secret):
+            calls.append((dict(config), secret))
+
+    monkeypatch.setattr(
+        "app.routers.sources.get_adapter", lambda _t: RecordingAdapter()
+    )
+
+    # Partial PUT: url updated, everything else absent — must keep stored.
+    r = admin_client.put(
+        f"/api/sources/{sid}/connector",
+        json={"config": {"url": "ldap://new.example.com:389"}},
+    )
+    assert r.status_code == 200, r.text
+    assert calls[-1][0] == {
+        "url": "ldap://new.example.com:389",
+        "base_dn": "dc=example,dc=com",
+        "bind_dn": "cn=svc,dc=example,dc=com",
+        "filter": "(objectClass=person)",
+    }
+    assert calls[-1][1] == "stored-secret"
+
+    r = admin_client.get(f"/api/sources/{sid}")
+    assert r.status_code == 200, r.text
+    conn = r.json()["connector"]
+    assert conn["config"]["url"] == "ldap://new.example.com:389"
+    assert conn["config"]["base_dn"] == "dc=example,dc=com"
+    assert conn["has_secret"] is True
+
+
+def test_connector_put_blank_string_clears_field(admin_client, worker_session, monkeypatch):
+    """Explicit blank string clears that field while other stored keys
+    survive — blank-vs-absent is the whole merge contract."""
+    from app.models.source import DataSource
+
+    r = admin_client.post("/api/sources", json={"name": "BLANKCLR", "source_type": "ldap"})
+    assert r.status_code == 200, r.text
+    sid = r.json()["id"]
+
+    async def seed():
+        async with worker_session() as maker:
+            async with maker() as s:
+                src = await s.get(DataSource, sid)
+                src.connector_config = json.dumps({
+                    "url": "ldap://ldap.example.com:389",
+                    "base_dn": "dc=example,dc=com",
+                    "bind_dn": "cn=svc,dc=example,dc=com",
+                })
+                src.connector_secret = "stored-secret"
+                await s.commit()
+
+    asyncio.run(seed())
+
+    calls = []
+
+    class RecordingAdapter:
+        def validate(self, config, secret):
+            calls.append((dict(config), secret))
+
+    monkeypatch.setattr(
+        "app.routers.sources.get_adapter", lambda _t: RecordingAdapter()
+    )
+
+    # Explicit blank: bind_dn cleared, url/base_dn survive.
+    r = admin_client.put(
+        f"/api/sources/{sid}/connector",
+        json={"config": {"bind_dn": ""}},
+    )
+    assert r.status_code == 200, r.text
+    assert calls[-1][0] == {
+        "url": "ldap://ldap.example.com:389",
+        "base_dn": "dc=example,dc=com",
+    }
+    assert "bind_dn" not in calls[-1][0]
+
+
 def test_worker_pass_through_real_registry(admin_client, worker_session):
     """Full run_pass with the DEFAULT fetch path (registry dispatch):
     a sql source configured against a real SQLite file syncs end-to-end."""

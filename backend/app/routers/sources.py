@@ -292,9 +292,13 @@ async def put_connector(
     source_id: int, body: ConnectorIn, db: DbSession, user: CertAdminUser,
     settings: Settings = Depends(get_settings),
 ):
-    """Set connector config + secret + interval. Adapter validate() runs
-    synchronously (timeout-bounded) BEFORE saving — misconfig dies here,
-    not at 03:00 in the worker (validate_smtp philosophy)."""
+    """Set connector config + secret + interval. Config is MERGED against
+    the stored config: keys absent from the request keep their stored
+    values, keys present-but-blank are cleared — so a partial PUT can
+    no longer silently wipe fields (blank-string vs missing-key is the
+    whole contract). Adapter validate() runs synchronously (timeout-
+    bounded) BEFORE saving — misconfig dies here, not at 03:00 in the
+    worker (validate_smtp philosophy)."""
     s = await db.get(DataSource, source_id)
     if s is None:
         raise HTTPException(404, "Source not found")
@@ -304,10 +308,12 @@ async def put_connector(
         adapter = get_adapter(s.source_type.value)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
+    stored_config: dict = json.loads(s.connector_config) if s.connector_config else {}
+    config = {k: v for k, v in {**stored_config, **body.config}.items() if v != ""}
     secret = body.secret or s.connector_secret or ""
     try:
         await asyncio.wait_for(
-            asyncio.to_thread(adapter.validate, body.config, secret),
+            asyncio.to_thread(adapter.validate, config, secret),
             timeout=settings.connector_timeout_seconds,
         )
     except asyncio.TimeoutError:
@@ -318,20 +324,17 @@ async def put_connector(
         raise HTTPException(400, str(exc))
     except Exception as exc:  # noqa: BLE001 - any wire error is a 400 here
         raise HTTPException(400, f"connector validation failed: {exc}")
-    old_interval = s.sync_interval_minutes
-    s.connector_config = json.dumps(body.config)
+    s.connector_config = json.dumps(config)
     if body.secret:
         s.connector_secret = body.secret
-    s.sync_interval_minutes = body.sync_interval_minutes
-    if body.sync_interval_minutes:
-        s.next_sync_at = utcnow()
-    elif old_interval and not body.sync_interval_minutes:
-        s.next_sync_at = None
+    if "sync_interval_minutes" in body.model_fields_set:
+        s.sync_interval_minutes = body.sync_interval_minutes
+        s.next_sync_at = utcnow() if body.sync_interval_minutes else None
     await append_audit(db, actor_id=user.id, actor_username=user.identity.username or "",
                        action="source_connector_configured", entity_type="data_source",
                        entity_id=source_id,
                        details={"type": s.source_type.value,
-                                "interval_minutes": body.sync_interval_minutes,
+                                "interval_minutes": s.sync_interval_minutes,
                                 "secret_changed": bool(body.secret)})
     await db.commit()
     return {"ok": True, "validated": True}

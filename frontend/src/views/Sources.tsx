@@ -374,7 +374,7 @@ function ConnectorPanel({
       await api.sources.configureConnector(source.id, {
         config,
         secret: secret || undefined,
-        sync_interval_minutes: interval ? Number(interval) : undefined,
+        sync_interval_minutes: interval ? Number(interval) : null,
       });
       setNotice(`Connector for ${source.name} validated and saved`);
       setSecret("");

@@ -28,3 +28,8 @@ scripts/smtp_sink_log.jsonl
 # mintlify dev server scratch logs
 docs-site/mintlify-dev*.out
 docs-site/mintlify-dev*.err
+
+# smtp sink runtime scratch (process may hold these open)
+smtp_sink.err
+smtp_sink.out
+smtp_sink_log.jsonl

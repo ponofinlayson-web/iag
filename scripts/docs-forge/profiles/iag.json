@@ -1,0 +1,122 @@
+{
+  "name": "iag",
+  "docs_group": "IAG",
+  "root": "../../..",
+  "base_url": "http://localhost:8091",
+  "safety": {
+    "note": "original live stack project 'iag' on 8090 must stay untouched",
+    "original_containers": [
+      "iag-db",
+      "iag-nginx",
+      "iag-app-1",
+      "iag-app-2",
+      "iag-app-3",
+      "iag-glauth"
+    ]
+  },
+  "login": {
+    "user": "admin",
+    "password": {
+      "env_file": ".env",
+      "key": "IAG_BOOTSTRAP_ADMIN_PASSWORD"
+    },
+    "selectors": {
+      "user": "form label:nth-of-type(1) input",
+      "password": "form label:nth-of-type(2) input",
+      "submit": "form button"
+    },
+    "success": "nav"
+  },
+  "shots": [
+    {
+      "name": "01-login",
+      "path": "/",
+      "pre_auth": true
+    },
+    {
+      "name": "02-dashboard",
+      "path": "/"
+    },
+    {
+      "name": "03-identities",
+      "path": "/identities"
+    },
+    {
+      "name": "04-sources",
+      "path": "/sources"
+    },
+    {
+      "name": "05-entitlements",
+      "path": "/entitlements"
+    },
+    {
+      "name": "06-campaigns",
+      "path": "/campaigns"
+    },
+    {
+      "name": "07-risk",
+      "path": "/risk"
+    },
+    {
+      "name": "08-sod",
+      "path": "/sod"
+    },
+    {
+      "name": "09-remediation",
+      "path": "/remediation"
+    },
+    {
+      "name": "10-api-keys",
+      "path": "/api-keys"
+    },
+    {
+      "name": "11-users",
+      "path": "/users"
+    },
+    {
+      "name": "12-reminders-outbox",
+      "path": "/outbox"
+    },
+    {
+      "name": "13-reviews",
+      "path": "/reviews"
+    },
+    {
+      "name": "14-audit",
+      "path": "/audit"
+    },
+    {
+      "name": "15-campaign-detail",
+      "path": "/campaigns/1"
+    },
+    {
+      "name": "16-campaign-report",
+      "path": "/campaigns/1/report"
+    }
+  ],
+  "theme": {
+    "name": "17-theme-dark",
+    "selector": "button.theme-toggle",
+    "toggle_back": true,
+    "path": "/"
+  },
+  "output_dir": "docs/screenshots",
+  "min_bytes": 8000,
+  "viewport": [
+    1280,
+    800
+  ],
+  "evidence_command": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/docs-forge/profiles/iag/collect-evidence.ps1",
+  "guide_file": "docs/admin-guide.md",
+  "site_dir": "docs-site",
+  "git": {
+    "repo": ".",
+    "branch": "main",
+    "publish": {
+      "repo": "D:/Projects/iag-docs",
+      "branch": "main",
+      "push_url": "https://github.com/ponofinlayson-web/iag-docs.git",
+      "token_env": "GITHUB_PERSONAL_ACCESS_TOKEN"
+    }
+  }
+}

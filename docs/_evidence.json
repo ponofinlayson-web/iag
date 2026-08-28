@@ -1,0 +1,28 @@
+{
+  "generated": "2026-08-28 16:09 -06:00",
+  "base": "http://localhost:8091",
+  "health": {
+    "status": "ok",
+    "service": "iag-api",
+    "version": "0.3.0"
+  },
+  "dashboard": {
+    "identities": 10,
+    "accounts": 24,
+    "unlinked_accounts": 11,
+    "privileged_accounts": 11,
+    "active_campaigns": 8,
+    "my_pending_reviews": 31
+  },
+  "audit_verify": {
+    "valid": true,
+    "entries": 183,
+    "head": "f99abae4be5c24c719dd2ca7b46fde7a712c280137cf7eeb5e48e848857913ab"
+  },
+  "campaigns": {
+    "statuses": "active=8 cancelled=1 completed=1",
+    "count": 10
+  },
+  "api_keys": 3,
+  "users": 1
+}

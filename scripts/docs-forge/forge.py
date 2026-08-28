@@ -17,6 +17,7 @@ Design rules (paid for on 2026-08-26, see AGENTS.md):
 - relative paths in a profile resolve against its "root", not the CWD
 """
 import argparse
+import fnmatch
 import hashlib
 import json
 import os
@@ -198,12 +199,15 @@ def publish_site(profile: dict) -> dict:
         raise SystemExit(f"publish repo {repo} is not a git clone - clone it first")
 
     keep = {".git", "README.md", "CNAME"}
+    skip = ("mint-*.out", "mint-*.err", "mintlify-dev*.out", "mintlify-dev*.err", ".DS_Store")
     for name in os.listdir(repo):
         if name in keep:
             continue
         p = os.path.join(repo, name)
         shutil.rmtree(p) if os.path.isdir(p) else os.remove(p)
     for name in os.listdir(site):
+        if any(fnmatch.fnmatch(name, pat) for pat in skip):
+            continue
         s = os.path.join(site, name)
         if os.path.isdir(s):
             shutil.copytree(s, os.path.join(repo, name), dirs_exist_ok=True)

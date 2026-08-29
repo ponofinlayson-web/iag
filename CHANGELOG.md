@@ -4,6 +4,20 @@ All notable changes to IAG are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+## [0.3.1] - 2026-08-29
+
+### Added
+
+- MIT license - the project is now open source under MIT, copyright
+  Pono Finlayson.
+- Contributor wiring: `CONTRIBUTING.md`, Code of Conduct, `SECURITY.md`
+  with a disclosure policy, and issue/PR templates. PRs disclose AI
+  assistance as a project convention.
+- CI: backend tests (uv + pytest) and frontend build run on every PR
+  and on push to `main`.
+
 ## [0.3.0] - 2026-08-24
 
 Feature 7: RBAC user management and the theme system (light/dark with

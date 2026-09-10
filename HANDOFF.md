@@ -91,6 +91,23 @@ backend/tests/test_audit_tamper.py — raw-SQL mutation must break chain
 backend/pyproject.toml — deps + pytest config (pythonpath=["."])
 uv.lock + .venv exist — `uv sync` completed successfully [V]
 
+## Current status (2026-09-10, session 29 close) — AGENTS.md LANDED (PR #4)
+Reviewed + verified PR #4 (agents-md): all claims checked against
+repo state — 290 tests collected (count still exact), all referenced
+paths exist. One-line polish: `.openhands/memory/` noted as
+host-local/gitignored in the read order. Rebased onto 7804dca, CI
+green (backend 2m44s, frontend, CodeQL py+js), squash-merged as
+1c3a81b. AGENTS.md is now the canonical agent primer for this repo.
+This HANDOFF entry was a user-authorized direct commit to main
+(2026-09-10, single approval — not a standing rule).
+
+HOST ALERT (needs user decision, non-blocking): primary checkout
+`~/Projects/GitHub/ponofinlayson-web/iag` is ahead 6 / behind 2 with
+~40 uncommitted docs-site files (forge residue). The 6 local commits =
+Linux forge port (2be80b6), publish fixes, W1 minors, RUNBOOK-linux,
+nginx hardening, CSP fix — real work, never pushed. Reconcile (push
+vs rebase+PR) before the next forge/docs session; do not discard.
+
 ## Current status (2026-08-25, session 28 close) — P1-P3 BACKLOG CLEARED, LIVE-VERIFIED
 Session opened as recovery of a hung chat (harness KeyError mid-E2E);
 all P1-P3 work reconstructed from event forensics and verified on disk
@@ -438,6 +455,13 @@ pass, any remaining deferred-list entries, UI polish, release
 packaging (v0.1 tag + notes) - user's call on priority.
 
 ## Session log (newest first)
+### 2026-09-10 (session 29): PR #4 AGENTS.md review + merge
+- PR #4 (docs primer) reviewed, verified, polished (memory path is
+  host-local), rebased onto 7804dca, squash-merged as 1c3a81b.
+- Discovered primary checkout divergence (6 ahead / 2 behind + dirty
+  docs-site) — recorded as HOST ALERT in current status above.
+- `.openhands/memory/` initialized on the Linux host (primary checkout).
+
 ### 2026-08-23 (session 22): T1 E2E browser pass + T2 deferred-list close
 - T1 COMPLETE: full UI spine walked in-browser as e2e_admin vs live
   glauth stack - source -> connector config (live bind validation) ->

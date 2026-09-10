@@ -4,7 +4,8 @@ You are a fresh agent session. This file is durable rules and hard-won
 knowledge. It does not change session to session. For current project
 state read, in order: `HANDOFF.md` (continuation point + ratified user
 decisions), then `.openhands/memory/MEMORY.md` (session history, newest
-first), then `REQUIREMENTS.md` + `ARCHITECTURE.md` (frozen contracts —
+first; host-local, gitignored — absent on a fresh clone), then
+`REQUIREMENTS.md` + `ARCHITECTURE.md` (frozen contracts —
 do not re-litigate them; ratified changes are recorded in HANDOFF.md).
 
 ## What this repo is
